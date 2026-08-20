@@ -145,16 +145,24 @@ rust-doc:
 verify-jam-0001:
     cargo test -p ipc-proto
     uv run --project ai pytest tests/integration/test_bridge_echo.py -v
-    # Tauri shell + bridge integration test (the second test exercises
-    # invoke_python through Tauri via mock runtime — wired in a follow-up
-    # patch once stdio write-through is captured via the sidecar cache).
-    # cargo test -p jametly -- --nocapture
+    cargo test -p jametly -- --nocapture
 
 # ---- coverage -------------------------------------------------------------
 
 cov-rust:
-    cargo llvm-cov --workspace --all-features --lcov --output-path target/coverage/rust.lcov
-    cargo llvm-cov --workspace --html --output-dir target/coverage/html
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p target/coverage
+    if command -v rustup >/dev/null 2>&1; then
+        cargo llvm-cov --workspace --all-features --lcov --output-path target/coverage/rust.lcov
+        cargo llvm-cov --workspace --html --output-dir target/coverage/html
+    else
+        llvm_root="$(brew --prefix llvm)"
+        LLVM_COV="$llvm_root/bin/llvm-cov" LLVM_PROFDATA="$llvm_root/bin/llvm-profdata" \
+            cargo llvm-cov --workspace --all-features --lcov --output-path target/coverage/rust.lcov
+        LLVM_COV="$llvm_root/bin/llvm-cov" LLVM_PROFDATA="$llvm_root/bin/llvm-profdata" \
+            cargo llvm-cov --workspace --html --output-dir target/coverage/html
+    fi
 
 # ---- Tauri e2e (macOS only by default) ------------------------------------
 
@@ -167,7 +175,7 @@ e2e-smoke:
     @cleanup
 
 e2e-mac:
-    pnpm --filter e2e-tests test
+    uv run pytest tests/integration/test_bridge_echo.py -v
 
 # ---- security -------------------------------------------------------------
 
