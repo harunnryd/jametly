@@ -4,10 +4,7 @@
   "version": "0.0.0",
   "identifier": "app.jametly.desktop",
   "build": {
-    "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build",
-    "devUrl": "http://localhost:1420",
-    "frontendDist": "../dist"
+    "frontendDist": "../app"
   },
   "app": {
     "withGlobalTauri": false,
@@ -39,21 +36,14 @@
     "category": "Productivity",
     "shortDescription": "Local, invisible AI that listens with you during meetings",
     "longDescription": "jametly runs a local AI that captures meeting audio and surfaces answers, summaries, and follow-ups in a hotkey overlay. 100% on-device, 100% invisible, 100% yours.",
-    "publisher": "jametly contributors",
     "copyright": "© 2026 jametly contributors",
     "externalBin": [],
-    "publisherName": "jametly",
+    "publisher": "jametly",
+    "icon": ["icons/icon.png", "icons/icon.ico"],
     "macOS": {
       "minimumSystemVersion": "13.0",
       "entitlements": "entitlements.plist"
-    },
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ]
+    }
   },
   "plugins": {
     "updater": {

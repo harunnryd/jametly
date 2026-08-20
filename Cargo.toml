@@ -2,11 +2,11 @@
 resolver = "2"
 members = [
     "src-tauri",
-    # core/audio-backend (Phase 0+)
-    # core/screen-capture (Phase 0+)
-    # core/sqlite-store (Phase 0+)
-    # core/ipc-proto (Phase 0+)
-    # core/secure-store (Phase 1+; OS keychain for user API keys only)
+    "core/ipc-proto",
+    # core/audio-backend (Phase 1+)
+    # core/screen-capture (Phase 1+)
+    # core/sqlite-store (Phase 1+)
+    # core/secure-store (Phase 1+)
     # core/stealth-macos (Phase 5+; opt-in)
 ]
 
@@ -18,26 +18,26 @@ license = "MIT"
 repository = "https://github.com/jametly/jametly"
 
 [workspace.dependencies]
-# Core Tauri stack (Phase 0+)
-# tauri         = { version = "2", features = ["macos-private-api"] }
-# tauri-build   = "2"
-# tauri-plugin-shell             = "2"
-# tauri-plugin-global-shortcut   = "2"
-# tauri-plugin-keychain          = "2"
-# tauri-plugin-opener            = "2"
-# tauri-plugin-sql               = { version = "2", features = ["sqlite"] }
-# tauri-plugin-updater           = "2"
-# tauri-plugin-autostart         = "2"
-# tauri-plugin-macos-permissions  = "2"
+# Core Tauri stack (Phase 1+ — uncomment as needed)
+# tauri                       = { version = "2", features = ["macos-private-api"] }
+# tauri-build                 = "2"
+# tauri-plugin-shell           = "2"
+# tauri-plugin-global-shortcut = "2"
+# tauri-plugin-keychain        = "2"
+# tauri-plugin-opener          = "2"
+# tauri-plugin-sql             = { version = "2", features = ["sqlite"] }
+# tauri-plugin-updater         = "2"
+# tauri-plugin-autostart       = "2"
+# tauri-plugin-macos-permissions = "2"
 
-# Per-OS audio (Phase 0+)
+# Per-OS audio (Phase 1+)
 # cpal                       = "0.15"
-# cidre                      = { version = "0.11", features = ["ca","sc","objc"] }  # mac only
-# wasapi                     = "0.13"                                                 # win only
-# libpulse-binding           = { version = "2.30", features = ["async"] }           # linux only
-# libpulse-simple-binding    = "2.30"                                                 # linux only
+# cidre                      = { version = "0.11", features = ["ca","sc","objc"] }   # mac only
+# wasapi                     = "0.13"                                                # win only
+# libpulse-binding           = { version = "2.30", features = ["async"] }          # linux only
+# libpulse-simple-binding    = "2.30"                                                # linux only
 
-# Screen capture (Phase 1+)
+# Screen capture (Phase 3+)
 # xcap    = "0.0.12"
 # image   = { version = "0.25", default-features = false }
 
@@ -54,7 +54,7 @@ mockall      = "0.13"
 insta        = { version = "1.41", features = ["yaml"] }
 rstest       = "0.23"
 test-case    = "3.3"
-nextest       = "0.12"  # cargo-nextest — install via `cargo install cargo-nextest --locked`
+nextest      = "0.12"
 llvm-cov     = "0.6"
 
 [profile.release]
