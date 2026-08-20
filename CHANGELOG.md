@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Phase 0 skeleton bridge** (`JAM-0001-stdio-bridge`): `core/ipc-proto` (serde envelope types), `ai/src/jamly` (Python sidecar with `echo` + error envelopes), `src-tauri` (Tauri shell + `bridge::Sidecar` via `tokio::process::Command`). 13 Rust contract tests + 4 Python integration tests pass. Verified manually: echo, unknown-method, malformed-JSON paths all produce canonical wire output.
 - **GOAL.md** — mission + 5 architectural lines (immutable) + non-goals + 2-part north-star test (invisibility + recall). Source of truth for the architectural commitments.
 - Day-0 repo scaffold: meta files (LICENSE, README, AGENTS, CONTRIBUTING, STYLE, SECURITY, TRADEMARKS, CHANGELOG, GOAL), .claude/ ops config (settings + commands + hooks), docs/ (architecture + decisions + tasks + **conventions**), justfile (tiered `verify` / `verify-ci` / `verify-strict` / `verify-full`), CODEOWNERS, .pre-commit-config.yaml (ruff + guard + `dcg` + comment-density), .github/ (PR + issue templates + CI), workspace manifests (package.json, pnpm-workspace.yaml, Cargo.toml, pyproject.toml, tauri.conf.json)
 - **docs/conventions/TEST_STRATEGY.md**: per-substack test layer-mix, tooling picks, coverage thresholds, mutation testing schedule, AI/LLM eval tooling (DeepEval + LangSmith), 2-tier confidence model
