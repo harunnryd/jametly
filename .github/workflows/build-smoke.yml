@@ -1,0 +1,106 @@
+name: build-smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Once a week, Monday 09:00 UTC — nightly Tier 2 (`just verify-strict`) catches upstream dep drift
+    - cron: "0 9 * * 1"
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            src-tauri -> ../src-tauri/target
+            core -> ../core/target
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - uses: astral-sh/uv-action@v3
+        with:
+          tool-version: "0.5.x"
+
+      - name: Install deps
+        run: |
+          uv sync --all-extras --frozen
+          pnpm install --frozen-lockfile
+          cargo fetch
+
+      - name: Tier 0 verify (PR gate)
+        run: just verify
+        env:
+          CI: "true"
+
+      - name: Tier 1 verify-ci
+        run: just verify-ci
+        env:
+          CI: "true"
+
+      - name: Audit
+        run: just audit
+        continue-on-error: true
+
+  mutants-weekly:
+    name: cargo-mutants (weekly, monday cron)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-mutants
+        run: cargo install cargo-mutants --locked
+      - name: Run mutants (time-boxed at 90 min)
+        run: timeout 5400 cargo mutants --workspace --timeout 60 --regressions | tee mutants.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutants-log
+          path: mutants.log
+
+  stealth-e2e-macos:
+    name: stealth E2E (macOS only — xcap + osascript)
+    runs-on: macos-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/uv-action@v3
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+      - run: |
+          uv sync --all-extras --frozen
+          pnpm install --frozen-lockfile
+          cargo fetch
+      - name: Stealth verification (xcap + osascript)
+        run: JAMETLY_STEALTH_E2E=1 uv run pytest tests/stealth -v
+        # Until src-tauri/ scaffold is in place, mark expected-fail.
+        continue-on-error: true

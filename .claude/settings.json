@@ -1,0 +1,136 @@
+{
+  "$schema": "https://anthropic.com/claude-code/settings-schema.json",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch",
+      "Bash(uv *)",
+      "Bash(pip *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(cargo test*)",
+      "Bash(cargo build*)",
+      "Bash(cargo clippy*)",
+      "Bash(cargo fmt*)",
+      "Bash(cargo run*)",
+      "Bash(cargo audit*)",
+      "Bash(cargo nextest*)",
+      "Bash(cargo llvm-cov*)",
+      "Bash(cargo mutants*)",
+      "Bash(just *)",
+      "Bash(pnpm *)",
+      "Bash(node *)",
+      "Bash(pytest *)",
+      "Bash(rustc --version)",
+      "Bash(uv --version)",
+      "Bash(pnpm --version)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(git remote -v)",
+      "Bash(git stash list)",
+      "Bash(git status --short)",
+      "Bash(ls *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(rg *)",
+      "Bash(tree *)",
+      "Bash(mkdir -p *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(file *)",
+      "Bash(mdfind *)"
+    ],
+    "ask": [
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+      "Bash(git switch *)",
+      "Bash(git merge *)",
+      "Bash(git rebase *)",
+      "Bash(git push*)",
+      "Bash(git pull*)",
+      "Bash(git fetch*)",
+      "Bash(cargo publish*)",
+      "Bash(uv publish*)",
+      "Bash(pnpm publish*)",
+      "Bash(npm publish*)",
+      "Bash(brew install*)",
+      "Bash(brew uninstall*)",
+      "Bash(sudo*)",
+      "Bash(chmod -R*)",
+      "Bash(chown*)"
+    ],
+    "deny": [
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~*)",
+      "Bash(rm -rf /)",
+      "Bash(git reset --hard*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git clean -fdx*)",
+      "Bash(dropdb*)",
+      "Bash(format [A-Za-z]:*)",
+      "Bash(format /dev/*)",
+      "Bash(mkfs*)",
+      "Bash(diskutil erase*)",
+      "Bash(sudo rm*)",
+      "Bash(sudo dd*)",
+      "Bash(:(){ :|:&};:)",
+      "Bash(systemctl*)",
+      "Bash(launchctl*)",
+      "Bash(shutdown*)",
+      "Bash(reboot*)",
+      "Bash(halt*)",
+      "Bash(chmod 777*)",
+      "Bash(gh repo delete*)",
+      "Bash(gh repo edit*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/block-destructive.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/strip-restate-comments.sh 2>/dev/null || true",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/format-on-write.sh 2>/dev/null || true",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  },
+  "model": "opus",
+  "cleanupPeriodDays": 30,
+  "includeCoAuthoredBy": false
+}

@@ -1,0 +1,93 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.7.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=2048]
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: detect-private-key
+
+  - repo: https://github.com/doublify/pre-commit-rust
+    rev: v1.0.0
+    hooks:
+      - id: fmt
+        args: [--all]
+      - id: cargo-check
+        args: [--all-targets]
+      - id: clippy
+        args: [--all-targets, --, -D, warnings]
+
+  - repo: local
+    hooks:
+      - id: no-todo-without-ticket
+        name: TODO comments must include owner + ticket
+        entry: bash -c 'grep -rEn "TODO[^(]*\\(" --include="*.py" --include="*.rs" --include="*.ts" --include="*.tsx" ai/ src-tauri/ core/ app/ 2>/dev/null | grep -vE "(JAM-[0-9]{4})" || true'
+        language: system
+        pass_filenames: false
+
+      - id: no-restate-the-code-comments
+        name: flag LLM-flavored "First, we..." / "Now we..." style comments
+        entry: bash -c '
+          bad=0
+          for f in $(git diff --cached --name-only --diff-filter=AM -- "*.py" "*.rs" "*.ts" "*.tsx"); do
+            [ -f "$f" ] || continue
+            matches=$(grep -nE "(^\s*//|^\s*#)\s*(First,|Now,|This\s+(function|method|class|module)|Here\s+we|The\s+following|Let'\''s|We\s+now)" "$f" 2>/dev/null || true)
+            if [ -n "$matches" ]; then
+              echo "$f:" >&2
+              echo "$matches" >&2
+              bad=1
+            fi
+          done
+          [ "$bad" = "0" ] || (echo "Strip restate-the-code comments before commit. See STYLE.md." >&2 && exit 1)
+        '
+        language: system
+        pass_filenames: false
+
+      - id: comment-density-guard
+        name: flag files with high comment:code ratio (likely AI over-commenting)
+        entry: bash -c '
+          threshold=0.40
+          bad=0
+          for f in $(git diff --cached --name-only --diff-filter=AM -- "*.py" "*.rs" "*.ts" "*.tsx"); do
+            [ -f "$f" ] || continue
+            total=$(grep -cE ".+" "$f" 2>/dev/null || echo 0)
+            comments=$(grep -cE "^\s*(#|//|/\*|\*)" "$f" 2>/dev/null || echo 0)
+            [ "$total" -gt 20 ] || continue
+            ratio=$(awk -v c="$comments" -v t="$total" "BEGIN { if (t+0 > 0) printf \"%.2f\", c/t; else print \"0\" }")
+            flagged=$(awk -v r="$ratio" -v th="$threshold" "BEGIN { print (r+0 > th) ? \"1\" : \"0\" }")
+            if [ "$flagged" = "1" ]; then
+              echo "$f comment:code=$ratio (threshold $threshold)" >&2
+              bad=1
+            fi
+          done
+          [ "$bad" = "0" ] || (echo "Comment density too high. See STYLE.md AI-authored comments." >&2 && exit 1)
+        '
+        language: system
+        pass_filenames: false
+
+      - id: no-secrets-in-tracked-files
+        name: detect secrets in tracked files
+        entry: bash -c '! git grep -nIE "(api[_-]?key|secret|password|token)\\s*[:=]\\s*[''\"][a-zA-Z0-9_\\-]{16,}" -- ai/ src-tauri/ core/ app/ 2>/dev/null | grep -v "^Binary"'
+        language: system
+        pass_filenames: false
+
+      - id: dcg
+        name: destructive-command guard
+        entry: bash -c 'command -v dcg >/dev/null && dcg check || true'
+        language: system
+        pass_filenames: false

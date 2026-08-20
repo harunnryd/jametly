@@ -1,0 +1,48 @@
+# CODEOWNERS — one owner per area of the repo
+# Order matters: later patterns take precedence.
+#
+# NOTE: `@jametly/*` are GitHub team placeholders. Real teams must be created
+# in the org before merges route to actual reviewers. Until then, treat any
+# `@jametly/<handle>` as the intended future-owner; ping a maintainer via
+# GitHub issues if review routes to a non-existent team.
+
+# Default: tooling-owner gets the catch-all
+*                                               @jametly/tooling-owner
+
+# Cross-language contract (load-bearing)
+shared/schemas/                                 @jametly/ipc-owner
+
+# AI sidecar
+ai/                                             @jametly/ai-owner
+
+# Rust core + Tauri shell
+src-tauri/                                      @jametly/rust-owner
+core/                                           @jametly/rust-owner
+
+# Frontend
+app/                                            @jametly/frontend-owner
+
+# Tests (cross-stack home)
+tests/                                          @jametly/test-owner
+
+# Meta — owner-only
+.claude/                                        @jametly/tooling-owner
+docs/decisions/                                 @jametly/tooling-owner
+docs/architecture/                              @jametly/tooling-owner
+docs/conventions/                               @jametly/tooling-owner
+docs/tasks/                                     @jametly/tooling-owner
+CONTRIBUTING.md                                 @jametly/tooling-owner
+AGENTS.md                                       @jametly/tooling-owner
+SECURITY.md                                     @jametly/tooling-owner
+STYLE.md                                        @jametly/tooling-owner
+TRADEMARKS.md                                   @jametly/tooling-owner
+GOAL.md                                         @jametly/tooling-owner
+justfile                                        @jametly/tooling-owner
+Cargo.toml                                      @jametly/tooling-owner
+pyproject.toml                                  @jametly/tooling-owner
+package.json                                    @jametly/tooling-owner
+pnpm-workspace.yaml                             @jametly/tooling-owner
+
+# CI
+.github/                                        @jametly/tooling-owner
+.pre-commit-config.yaml                         @jametly/tooling-owner
