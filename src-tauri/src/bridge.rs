@@ -97,6 +97,7 @@ impl Sidecar {
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::time::Duration;
 
     #[tokio::test]
     async fn sidecar_echo_round_trip() {
@@ -117,5 +118,99 @@ mod tests {
             }
             Reply::Err(err) => panic!("expected echo success, got {err:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn sidecar_surfaces_events_through_the_event_channel() {
+        let mut sidecar = Sidecar::spawn().await.expect("sidecar should spawn");
+        let mut events = sidecar.take_events().expect("event receiver is available once");
+
+        let reply = sidecar
+            .request(Request {
+                id: "stream-1".into(),
+                method: "debug.stream".into(),
+                params: json!({"count": 2}),
+            })
+            .await
+            .expect("sidecar should reply");
+
+        match reply {
+            Reply::Ok(ok) => {
+                assert_eq!(ok.id, "stream-1");
+                assert_eq!(ok.result, json!({"count": 2}));
+            }
+            Reply::Err(err) => panic!("expected debug.stream success, got {err:?}"),
+        }
+
+        let mut kinds = Vec::new();
+        for _ in 0..3 {
+            let ev = tokio::time::timeout(Duration::from_secs(10), events.recv())
+                .await
+                .expect("event should arrive within 10s")
+                .expect("event channel should stay open");
+            assert_eq!(ev.method, "stream.event");
+            assert_eq!(ev.params["correlation_id"], "stream-1");
+            kinds.push(ev.params["kind"].as_str().unwrap().to_string());
+        }
+        assert_eq!(kinds, ["token", "token", "done"]);
+        assert_eq!(sidecar.events_dropped(), 0);
+    }
+
+    #[tokio::test]
+    async fn event_receiver_is_only_handed_out_once() {
+        let mut sidecar = Sidecar::spawn().await.expect("sidecar should spawn");
+        assert!(sidecar.take_events().is_some());
+        assert!(sidecar.take_events().is_none());
+    }
+
+    #[tokio::test]
+    async fn events_do_not_break_reply_correlation() {
+        let mut sidecar = Sidecar::spawn().await.expect("sidecar should spawn");
+        let _events = sidecar.take_events();
+
+        for i in 0..3 {
+            let id = format!("seq-{i}");
+            let reply = sidecar
+                .request(Request {
+                    id: id.clone(),
+                    method: "debug.stream".into(),
+                    params: json!({"count": 1}),
+                })
+                .await
+                .expect("sidecar should reply");
+            match reply {
+                Reply::Ok(ok) => assert_eq!(ok.id, id),
+                Reply::Err(err) => panic!("expected success for {id}, got {err:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn event_channel_capacity_is_bounded() {
+        assert!(
+            EVENT_CHANNEL_CAPACITY > 0 && EVENT_CHANNEL_CAPACITY <= 4096,
+            "event backpressure must stay bounded, got {EVENT_CHANNEL_CAPACITY}"
+        );
+    }
+
+    #[tokio::test]
+    async fn dispatch_event_drops_newest_when_the_channel_is_full() {
+        let (tx, _rx) = tokio::sync::mpsc::channel::<Event>(2);
+        let dropped = Arc::new(AtomicU64::new(0));
+        let ev = |kind: &str| Event {
+            method: "stream.event".into(),
+            params: json!({"kind": kind}),
+        };
+
+        dispatch_event(&tx, &dropped, ev("token"));
+        dispatch_event(&tx, &dropped, ev("token"));
+        assert_eq!(dropped.load(Ordering::Relaxed), 0);
+
+        dispatch_event(&tx, &dropped, ev("done"));
+        assert_eq!(
+            dropped.load(Ordering::Relaxed),
+            1,
+            "the newest event is dropped and counted once the buffer is full"
+        );
     }
 }
