@@ -31,8 +31,6 @@ jobs:
             core -> ../core/target
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
@@ -41,7 +39,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v6
         with:
-          tool-version: "0.5.x"
+          version: "0.5.x"
 
       - name: Install deps
         run: |
@@ -90,8 +88,6 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
           node-version: 22
