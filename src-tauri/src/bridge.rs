@@ -1,12 +1,22 @@
+use std::collections::HashMap;
 use std::process::Stdio;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
-use ipc_proto::{Reply, Request};
+use ipc_proto::{Event, Reply, Request, WireMessage};
 use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, Command};
+use tokio::process::{Child, ChildStdout, Command};
+use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::task::JoinHandle;
 
 const SIDECAR_CMD: &str = "uv";
 const SIDECAR_ARGS: &[&str] = &["run", "--project", "ai", "python", "-m", "jamly"];
+
+/// Overflow policy once this many events are unread: drop the newest, count it, never block.
+pub const EVENT_CHANNEL_CAPACITY: usize = 256;
+
+type PendingReplies = Arc<Mutex<HashMap<String, oneshot::Sender<Reply>>>>;
 
 #[derive(Debug, Error)]
 pub enum BridgeError {
@@ -16,11 +26,8 @@ pub enum BridgeError {
     Write(String),
     #[error("sidecar reply parse failed: {0}")]
     Parse(#[from] serde_json::Error),
-    #[error("sidecar reply id mismatch (got {got:?}, expected {expected})")]
-    Correlation {
-        got: Option<String>,
-        expected: String,
-    },
+    #[error("sidecar stdout closed before replying to {0}")]
+    Closed(String),
 }
 
 impl From<std::io::Error> for BridgeError {
@@ -29,10 +36,56 @@ impl From<std::io::Error> for BridgeError {
     }
 }
 
+fn dispatch_event(events: &mpsc::Sender<Event>, dropped: &AtomicU64, event: Event) {
+    if events.try_send(event).is_err() {
+        dropped.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+async fn deliver_reply(pending: &PendingReplies, reply: Reply) {
+    let id = match &reply {
+        Reply::Ok(r) => r.id.clone(),
+        Reply::Err(r) => r.id.clone(),
+    };
+    match pending.lock().await.remove(&id) {
+        Some(waiter) => {
+            let _ = waiter.send(reply);
+        }
+        None => eprintln!("bridge: reply for unknown id {id}"),
+    }
+}
+
+async fn read_stdout(
+    stdout: ChildStdout,
+    pending: PendingReplies,
+    events: mpsc::Sender<Event>,
+    dropped: Arc<AtomicU64>,
+) {
+    let mut lines = BufReader::new(stdout).lines();
+    while let Ok(Some(line)) = lines.next_line().await {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<WireMessage>(line) {
+            Ok(WireMessage::Event(event)) => dispatch_event(&events, &dropped, event),
+            Ok(WireMessage::Reply(reply)) => deliver_reply(&pending, reply).await,
+            Ok(WireMessage::Request(req)) => {
+                eprintln!("bridge: sidecar sent an unexpected request: {}", req.method)
+            }
+            Err(e) => eprintln!("bridge: unparseable sidecar line: {e}"),
+        }
+    }
+    pending.lock().await.clear();
+}
+
 pub struct Sidecar {
     child: Child,
     stdin: tokio::process::ChildStdin,
-    stdout: BufReader<tokio::process::ChildStdout>,
+    pending: PendingReplies,
+    events: Option<mpsc::Receiver<Event>>,
+    events_dropped: Arc<AtomicU64>,
+    reader: JoinHandle<()>,
 }
 
 impl Sidecar {
@@ -52,44 +105,62 @@ impl Sidecar {
             .map_err(|e| BridgeError::Spawn(e.to_string()))?;
         let stdin = child.stdin.take().expect("stdin piped");
         let stdout = child.stdout.take().expect("stdout piped");
+
+        let pending: PendingReplies = Arc::new(Mutex::new(HashMap::new()));
+        let (event_tx, event_rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
+        let events_dropped = Arc::new(AtomicU64::new(0));
+        let reader = tokio::spawn(read_stdout(
+            stdout,
+            Arc::clone(&pending),
+            event_tx,
+            Arc::clone(&events_dropped),
+        ));
+
         Ok(Self {
             child,
             stdin,
-            stdout: BufReader::new(stdout),
+            pending,
+            events: Some(event_rx),
+            events_dropped,
+            reader,
         })
     }
 
+    pub fn take_events(&mut self) -> Option<mpsc::Receiver<Event>> {
+        self.events.take()
+    }
+
+    pub fn events_dropped(&self) -> u64 {
+        self.events_dropped.load(Ordering::Relaxed)
+    }
+
     pub async fn request(&mut self, req: Request) -> Result<Reply, BridgeError> {
-        let expected_id = req.id.clone();
+        let id = req.id.clone();
         let payload = serde_json::to_string(&req)? + "\n";
-        self.stdin.write_all(payload.as_bytes()).await?;
+        let (waiter, reply) = oneshot::channel();
+        self.pending.lock().await.insert(id.clone(), waiter);
+
+        if let Err(e) = self.write_all(payload.as_bytes()).await {
+            self.pending.lock().await.remove(&id);
+            return Err(e);
+        }
+        reply.await.map_err(|_| BridgeError::Closed(id))
+    }
+
+    async fn write_all(&mut self, payload: &[u8]) -> Result<(), BridgeError> {
+        self.stdin.write_all(payload).await?;
         self.stdin.flush().await?;
-
-        let mut line = String::new();
-        self.stdout.read_line(&mut line).await?;
-        if line.is_empty() {
-            return Err(BridgeError::Correlation {
-                got: None,
-                expected: expected_id,
-            });
-        }
-        let reply: Reply = serde_json::from_str(line.trim())?;
-
-        let got = match &reply {
-            Reply::Ok(r) => r.id.clone(),
-            Reply::Err(r) => r.id.clone(),
-        };
-        if got != expected_id {
-            return Err(BridgeError::Correlation {
-                got: Some(got),
-                expected: expected_id,
-            });
-        }
-        Ok(reply)
+        Ok(())
     }
 
     pub async fn kill_async(&mut self) -> std::io::Result<()> {
         self.child.start_kill()
+    }
+}
+
+impl Drop for Sidecar {
+    fn drop(&mut self) {
+        self.reader.abort();
     }
 }
 
@@ -123,7 +194,9 @@ mod tests {
     #[tokio::test]
     async fn sidecar_surfaces_events_through_the_event_channel() {
         let mut sidecar = Sidecar::spawn().await.expect("sidecar should spawn");
-        let mut events = sidecar.take_events().expect("event receiver is available once");
+        let mut events = sidecar
+            .take_events()
+            .expect("event receiver is available once");
 
         let reply = sidecar
             .request(Request {
@@ -187,10 +260,12 @@ mod tests {
 
     #[test]
     fn event_channel_capacity_is_bounded() {
-        assert!(
-            EVENT_CHANNEL_CAPACITY > 0 && EVENT_CHANNEL_CAPACITY <= 4096,
-            "event backpressure must stay bounded, got {EVENT_CHANNEL_CAPACITY}"
-        );
+        const {
+            assert!(
+                EVENT_CHANNEL_CAPACITY > 0 && EVENT_CHANNEL_CAPACITY <= 4096,
+                "event backpressure must stay bounded"
+            )
+        };
     }
 
     #[tokio::test]
