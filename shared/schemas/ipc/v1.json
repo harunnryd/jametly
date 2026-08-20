@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/jametly/jametly/shared/schemas/ipc/v1.json",
+  "title": "jametly IPC envelope v1",
+  "description": "Wire protocol between Rust host and Python AI sidecar over stdio JSON-RPC + NDJSON. Mirrored as serde structs in `core/ipc-proto/src/lib.rs` and as Pydantic models in `ai/src/jamly/protocol.py`. Any change here MUST land in both. The contract test in `core/ipc-proto/tests/protocol_contract.rs` will catch drift.",
+  "oneOf": [
+    { "$ref": "#/$defs/Request" },
+    { "$ref": "#/$defs/Reply" }
+  ],
+  "$defs": {
+    "Request": {
+      "type": "object",
+      "required": ["id", "method"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Caller-generated correlation id. Replies echo this id. UUIDv4 recommended."
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9._-]*$",
+          "description": "Dot-namespaced method name, e.g. `chat.stream`, `transcribe.audio`, `capture.screenshot`."
+        },
+        "params": {
+          "type": "object",
+          "description": "Method-specific parameters. Optional; defaults to {}.",
+          "additionalProperties": true
+        }
+      }
+    },
+    "Reply": {
+      "description": "Python → Rust reply. Exactly one of `result` or `error` is present (null fields omitted on the wire via Pydantic `exclude_none=True`).",
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "result": {
+          "description": "Method-specific success payload. Absent on error."
+        },
+        "error": { "$ref": "#/$defs/ErrorBody" }
+      },
+      "anyOf": [
+        { "required": ["result"], "properties": { "error": false } },
+        { "required": ["error"], "properties": { "result": false } }
+      ]
+    },
+    "ErrorBody": {
+      "type": "object",
+      "required": ["code", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "$ref": "#/$defs/ErrorCode" },
+        "message": { "type": "string", "minLength": 1 },
+        "retryable": { "type": "boolean", "default": false }
+      }
+    },
+    "ErrorCode": {
+      "type": "string",
+      "enum": [
+        "PARSE_ERROR",
+        "INVALID_REQUEST",
+        "IPC_SCHEMA_VERSION",
+        "PROVIDER_RATE_LIMIT",
+        "PROVIDER_AUTH",
+        "PROVIDER_UNAVAILABLE",
+        "PYTHON_TIMEOUT",
+        "AUDIO_DEVICE_LOST",
+        "OCR_FAILED",
+        "MEETING_NOT_FOUND",
+        "INTERNAL"
+      ],
+      "description": "Canonical error codes per `docs/architecture/01-ipc.md`."
+    }
+  }
+}
