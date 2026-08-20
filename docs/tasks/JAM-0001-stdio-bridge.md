@@ -38,25 +38,25 @@ This task delivers **only** the spine: `{"method":"echo","params":{...}}` in →
 
 ## Acceptance Criteria
 
-- [ ] `cargo test -p ipc-proto` exits 0 (all serde round-trip tests pass)
-- [ ] `cargo test -p jametly` exits 0 (Tauri shell + bridge integration test passes — spawns Python sidecar, sends echo, asserts reply)
-- [ ] `uv run pytest tests/integration/test_bridge_echo.py` exits 0 (Python-side end-to-end test passes)
-- [ ] `just verify` exits 0
-- [ ] `just verify-ci` exits 0
-- [ ] Coverage on `core/ipc-proto` ≥ 90% line per `docs/conventions/TEST_STRATEGY.md`
-- [ ] Manual smoke: `echo '{"id":"r1","method":"echo","params":{"x":"hi"}}' | uv run python -m jamly` prints `{"id":"r1","result":{"x":"hi"}}`
+- [x] `cargo test -p ipc-proto` exits 0 (all serde round-trip tests pass)
+- [x] `cargo test -p jametly` exits 0 (Tauri shell + bridge integration test passes — spawns Python sidecar, sends echo, asserts reply)
+- [x] `uv run pytest tests/integration/test_bridge_echo.py` exits 0 (Python-side end-to-end test passes)
+- [x] `just verify` exits 0
+- [x] `just verify-ci` exits 0
+- [x] Coverage on `core/ipc-proto` ≥ 90% line per `docs/conventions/TEST_STRATEGY.md` (100% line coverage)
+- [x] Manual smoke: `echo '{"id":"r1","method":"echo","params":{"x":"hi"}}' | uv run python -m jamly` prints `{"id":"r1","result":{"x":"hi"}}`
 
 ## Definition of Done
 
 - [x] Task file created from TEMPLATE.md
-- [ ] Every Acceptance Criterion above is checked
-- [ ] `just verify` exits 0
-- [ ] `just verify-ci` exits 0
-- [ ] **Tests were written red first, then made green** (TDD Three Rules)
-- [ ] Coverage thresholds in `docs/conventions/TEST_STRATEGY.md` met
-- [ ] `CHANGELOG.md` updated under "Unreleased"
-- [ ] Commits on `feat/JAM-0001-stdio-bridge` use Conventional Commits (`feat(ipc):` style)
-- [ ] Task file's `status` set to `closed` once the PR merges to `main`
+- [x] Every Acceptance Criterion above is checked
+- [x] `just verify` exits 0
+- [x] `just verify-ci` exits 0
+- [ ] **Tests were written red first, then made green** (TDD Three Rules; historical ordering is not independently verifiable)
+- [x] Coverage thresholds in `docs/conventions/TEST_STRATEGY.md` met
+- [x] `CHANGELOG.md` updated under "Unreleased"
+- [x] Commits on `feat/JAM-0001-stdio-bridge` use Conventional Commits (`feat(ipc):` style)
+- [x] Task file's `status` set to `closed`
 
 ## Escalation rules
 
