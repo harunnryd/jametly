@@ -58,6 +58,8 @@ __pycache__/
 htmlcov/
 *.egg
 .uv-cache/
+# Per-package lockfiles — workspace lockfile is `uv.lock` at the repo root.
+**/uv.lock
 
 # Rust / Cargo
 # ----------------------------------------------------------------------------
