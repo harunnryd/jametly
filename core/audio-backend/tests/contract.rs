@@ -17,6 +17,14 @@ fn bridge_format_is_16k_mono() {
 }
 
 #[test]
+fn backend_trait_supports_runtime_selection() {
+    fn accepts_backend(_: &dyn AudioBackend) {}
+
+    let backend = MockCapture::new(bridge_format(), 160);
+    accepts_backend(&backend);
+}
+
+#[test]
 fn frame_channel_capacity_is_bounded() {
     const {
         assert!(
@@ -102,7 +110,11 @@ async fn frame_timestamps_are_monotonic_and_gapless() {
     let step = frames[0].duration_ms();
     for pair in frames.windows(2) {
         assert!(pair[1].ts_ms > pair[0].ts_ms, "timestamps must increase");
-        assert_eq!(pair[1].ts_ms - pair[0].ts_ms, step, "no gaps between frames");
+        assert_eq!(
+            pair[1].ts_ms - pair[0].ts_ms,
+            step,
+            "no gaps between frames"
+        );
     }
 }
 

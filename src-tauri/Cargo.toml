@@ -28,6 +28,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 ipc-proto = { path = "../core/ipc-proto" }
+audio-backend = { path = "../core/audio-backend" }
 
 [features]
 default = ["custom-protocol"]
