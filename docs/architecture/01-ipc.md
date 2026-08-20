@@ -19,7 +19,7 @@ jametly's Rust host and Python sidecar communicate over **stdio JSON-RPC + NDJSO
 {
   "id": "req-7f9c1e2a-4b3d-4e0f-8a1c-2d3e4f5a6b7c",
   "method": "chat.stream",
-  "params": { "thread_id": "...", "user_text": "...", "system_prompt": "...", "provider_id": "anthropic", "model_id": "claude-sonnet-4-6", "image_path": "/tmp/_blobs/abc.png" }
+  "params": { "thread_id": "...", "user_text": "...", "system_prompt": "...", "provider_id": "anthropic", "model_id": "claude-sonnet-4-6", "image_path": "$APP_DATA_DIR/_blobs/abc.png" }
 }
 ```
 
@@ -51,6 +51,16 @@ or, on error:
 }
 ```
 
+## Event routing
+
+Replies and events share one stdout stream, so the host cannot read a single line per request. `src-tauri/src/bridge.rs` reads stdout on a background task and discriminates each line via `ipc_proto::WireMessage`:
+
+- **Reply** — matched against a pending-request map keyed by `id`; the waiting caller is woken through a oneshot channel. A reply for an unknown `id` is logged and dropped.
+- **Event** — pushed onto a bounded `tokio::sync::mpsc` channel (`bridge::EVENT_CHANNEL_CAPACITY`). The consumer takes the receiver once via `Sidecar::take_events()`.
+- **Request** — never expected from the sidecar; logged and dropped.
+
+**Backpressure:** the event channel is bounded. When it is full the reader drops the *newest* event and increments a counter (`Sidecar::events_dropped()`) rather than blocking — a slow consumer must never stall reply correlation or let the reader accumulate events without limit. Events are lossy by design; anything that must not be lost belongs in a reply.
+
 ## Method list (Rust → Python)
 
 | Method | Params | Result | Notes |
@@ -78,7 +88,8 @@ or, on error:
 | `config.get` | `{key}` | `{value}` | Read config.toml |
 | `config.set` | `{key, value}` | `{}` | Write |
 | `providers.list` | `{kind: "ai"\|"stt"}` | `{providers: [...]}` | Built-in + custom-cURL merged |
-| `providers.set_selected` | `{kind, id, variables}` | `{}` | Persists to localStorage |
+| `providers.set_selected` | `{kind, id, variables}` | `{}` | Persists to local `config.toml` |
+| `debug.stream` | `{count?}` (non-negative int, default 1) | `{count}` after `count` × `stream.event` + one `kind: "done"` | Transport diagnostic. Exercises event-before-reply ordering without any AI dependency; not a product surface. |
 
 ## Event list (Python → Rust)
 
@@ -138,5 +149,5 @@ Any breaking field addition/removal bumps the version. Adding a *new optional fi
 
 Both sides test this contract:
 - Rust side: `core/ipc-proto/tests/protocol_contract.rs` asserts every envelope shape matches using `insta` snapshots + property-based round-trips via `proptest`.
-- Python side: `ai/tests/test_bridge_async.py` + `tests/property/test_envelope_invariants.py` (Hypothesis) assert that random NDJSON byte streams parse either to a valid `Envelope` or raise one of the typed error codes above.
+- Python side: `tests/integration/test_bridge_async.py` + `tests/property/test_envelope_invariants.py` (Hypothesis) assert that random NDJSON byte streams parse either to a valid `Envelope` or raise one of the typed error codes above.
 - See [`../conventions/TEST_STRATEGY.md`](../conventions/TEST_STRATEGY.md).
