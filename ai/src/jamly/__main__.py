@@ -6,6 +6,7 @@ from typing import Callable, TextIO
 
 from pydantic import ValidationError
 
+from . import bridge
 from .protocol import ErrorBody, ErrorCode, Event, Reply, Request
 
 Emit = Callable[[Event], None]
@@ -96,7 +97,7 @@ def _serve(stdin: TextIO, stdout: TextIO) -> None:
 
 
 def main() -> None:
-    _serve(sys.stdin, sys.stdout)
+    bridge.run(sys.stdin, sys.stdout)
 
 
 if __name__ == "__main__":

@@ -154,6 +154,12 @@ verify-jam-0002:
     uv run pytest tests/integration/test_bridge_events.py -v
     cargo test -p jametly -- --nocapture
 
+# Phase 0: async sidecar runtime — concurrent dispatch and cancellation.
+verify-jam-0003:
+    uv run pytest tests/unit/test_async_bridge.py -v
+    uv run pytest tests/integration/test_bridge_async.py -v
+    uv run pytest tests/unit/test_sidecar.py tests/integration/test_bridge_events.py -v
+
 # ---- coverage -------------------------------------------------------------
 
 cov-rust:

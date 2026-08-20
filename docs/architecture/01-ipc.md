@@ -61,6 +61,15 @@ Replies and events share one stdout stream, so the host cannot read a single lin
 
 **Backpressure:** the event channel is bounded. When it is full the reader drops the *newest* event and increments a counter (`Sidecar::events_dropped()`) rather than blocking — a slow consumer must never stall reply correlation or let the reader accumulate events without limit. Events are lossy by design; anything that must not be lost belongs in a reply.
 
+## Sidecar concurrency
+
+The Python sidecar runs an asyncio runtime (`ai/src/jamly/bridge.py`). Each request is dispatched as its own task, so a slow handler blocks neither unrelated requests nor event delivery. Two consequences bind on the wire:
+
+- **Replies are unordered.** A fast request answered while a slow one is in flight replies first. Correlate strictly by `id` — never by arrival position.
+- **One writer.** All stdout writes serialize behind a single lock, so lines never interleave even when many tasks emit concurrently.
+
+**Terminal signals:** exactly one of `done`, `error`, or `cancelled` is terminal per `correlation_id`; no further `stream.event` for that id follows it. Because events are lossy (see Backpressure above), a cancelled request also resolves its correlated reply as `{"id": ..., "result": {"cancelled": true}}` — the terminal outcome is never conveyed by event alone. Cancellation is normal control flow, not a failure, which is why it is a `kind` rather than an `ErrorCode`.
+
 ## Method list (Rust → Python)
 
 | Method | Params | Result | Notes |
@@ -90,12 +99,13 @@ Replies and events share one stdout stream, so the host cannot read a single lin
 | `providers.list` | `{kind: "ai"\|"stt"}` | `{providers: [...]}` | Built-in + custom-cURL merged |
 | `providers.set_selected` | `{kind, id, variables}` | `{}` | Persists to local `config.toml` |
 | `debug.stream` | `{count?}` (non-negative int, default 1) | `{count}` after `count` × `stream.event` + one `kind: "done"` | Transport diagnostic. Exercises event-before-reply ordering without any AI dependency; not a product surface. |
+| `debug.sleep` | `{ms?}` (non-negative int, default 0) | `{slept_ms}`, or `{cancelled: true}` if cancelled | Transport diagnostic. Exercises concurrent dispatch and cancellation without any AI dependency; not a product surface. |
 
 ## Event list (Python → Rust)
 
 | Event | Params |
 |---|---|
-| `stream.event` | `{correlation_id, kind: "token"\|"state"\|"tool_call"\|"done"\|"error", data}` |
+| `stream.event` | `{correlation_id, kind: "token"\|"state"\|"tool_call"\|"done"\|"error"\|"cancelled", data}` |
 | `audio.frame` | `{ts_ms, samples_b64, sample_rate, channels}` (diagnostic only — production path is via tempfiles) |
 | `audio.level` | `{ts_ms, rms_db}` (at 10 Hz, for UI visualization) |
 | `transcript.partial` | `{speaker, text, segment_id}` |
