@@ -29,6 +29,49 @@ pub enum Reply {
     Err(ReplyErr),
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "EventRepr")]
+pub struct Event {
+    pub method: String,
+    pub params: Value,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EventRepr {
+    #[serde(default)]
+    id: Option<Value>,
+    method: String,
+    #[serde(default)]
+    params: Value,
+}
+
+impl TryFrom<EventRepr> for Event {
+    type Error = String;
+
+    fn try_from(repr: EventRepr) -> Result<Self, Self::Error> {
+        match repr.id {
+            None | Some(Value::Null) => {}
+            Some(id) => return Err(format!("event `id` must be absent or null, got {id}")),
+        }
+        if repr.method.is_empty() {
+            return Err("event `method` must not be empty".into());
+        }
+        Ok(Event {
+            method: repr.method,
+            params: repr.params,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum WireMessage {
+    Request(Request),
+    Reply(Reply),
+    Event(Event),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ErrorCode {
