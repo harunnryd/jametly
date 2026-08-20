@@ -46,7 +46,7 @@ jobs:
           node-version: 22
           cache: "pnpm"
 
-      - uses: astral-sh/uv-action@v3
+      - uses: astral-sh/setup-uv@v6
         with:
           tool-version: "0.5.x"
 

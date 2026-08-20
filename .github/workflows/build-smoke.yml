@@ -39,7 +39,7 @@ jobs:
           node-version: 22
           cache: "pnpm"
 
-      - uses: astral-sh/uv-action@v3
+      - uses: astral-sh/setup-uv@v6
         with:
           tool-version: "0.5.x"
 
@@ -87,7 +87,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/uv-action@v3
+      - uses: astral-sh/setup-uv@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: pnpm/action-setup@v4
         with:
