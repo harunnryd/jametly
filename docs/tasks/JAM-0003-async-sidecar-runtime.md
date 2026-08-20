@@ -38,7 +38,7 @@ JAM-0002 establishes event routing, but the Python sidecar still uses a synchron
 
 ## Definition of Done
 
-- [ ] Acceptance criteria checked, tests red-first, coverage not regressed, changelog updated, and PR CI green. **PR pending.**
+- [x] Acceptance criteria checked, tests red-first, coverage not regressed, changelog updated, and PR CI green. **PR #3; matrix green on macOS, Ubuntu, and Windows.**
 - [ ] `@ipc-owner` review is requested for any wire-contract change. **Required: this task adds the `cancelled` kind to the `stream.event` taxonomy and the `debug.sleep` diagnostic in `docs/architecture/01-ipc.md`, a file outside the declared scope list. `shared/schemas/ipc/v1.json` is untouched.**
 
 ## Escalation rules
