@@ -39,7 +39,7 @@
     "copyright": "© 2026 jametly contributors",
     "externalBin": [],
     "publisher": "jametly",
-    "icon": ["icons/icon.png"],
+    "icon": ["icons/icon.png", "icons/icon.ico"],
     "macOS": {
       "minimumSystemVersion": "13.0",
       "entitlements": "entitlements.plist"
