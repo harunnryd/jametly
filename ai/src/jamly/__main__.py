@@ -1,15 +1,3 @@
-"""jametly AI sidecar entry point.
-
-Phase 0: single in-flight request at a time, lock-step request/reply
-over stdio NDJSON. Phase 1+ adds the streaming event channel.
-
-Wire protocol (matches `core/ipc-proto/src/lib.rs`):
-- one request per line, JSON-encoded
-- one reply per line, JSON-encoded (untagged ok-or-err)
-- unknown methods return `INVALID_REQUEST`
-- malformed JSON returns `PARSE_ERROR`
-"""
-
 from __future__ import annotations
 
 import json

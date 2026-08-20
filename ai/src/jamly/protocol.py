@@ -1,10 +1,3 @@
-"""Wire-protocol mirrors of `core/ipc-proto/src/lib.rs` (Pydantic v2).
-
-If you change these, change `core/ipc-proto/src/lib.rs` in lockstep.
-The contract tests in `core/ipc-proto/tests/protocol_contract.rs` will
-catch drift.
-"""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -28,8 +21,6 @@ class ErrorCode(StrEnum):
 
 
 class Request(BaseModel):
-    """Rust → Python request envelope."""
-
     model_config = ConfigDict(extra="forbid")
 
     id: str
@@ -46,8 +37,6 @@ class ErrorBody(BaseModel):
 
 
 class Reply(BaseModel):
-    """Python → Rust reply envelope. Exactly one of `result` or `error`."""
-
     model_config = ConfigDict(extra="forbid")
 
     id: str

@@ -1,10 +1,4 @@
-//! Cross-crate protocol contract tests for `ipc-proto`.
-//!
-//! Asserts the wire format between Rust host and Python sidecar. The Python
-//! side mirrors these types via Pydantic; if this test passes after any
-//! change to `lib.rs`, the Python side must be updated in lockstep.
-
-use ipc_proto::{ErrorBody, ErrorCode, Reply, ReplyErr, ReplyOk, Request};
+use ipc_proto::{ErrorBody, ErrorCode, Reply, Request};
 use serde_json::{json, Value};
 
 #[test]

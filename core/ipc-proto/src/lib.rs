@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
-/// Request envelope: Rust → Python.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Request {
     pub id: String,
@@ -11,21 +10,18 @@ pub struct Request {
     pub params: Value,
 }
 
-/// Successful reply: Python → Rust.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReplyOk {
     pub id: String,
     pub result: Value,
 }
 
-/// Error reply: Python → Rust.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReplyErr {
     pub id: String,
     pub error: Value,
 }
 
-/// Reply envelope: Python → Rust. Either ok or err — flattened on the wire.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Reply {
@@ -33,7 +29,6 @@ pub enum Reply {
     Err(ReplyErr),
 }
 
-/// Canonical error codes (per `docs/architecture/01-ipc.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ErrorCode {
@@ -50,7 +45,6 @@ pub enum ErrorCode {
     Internal,
 }
 
-/// Typed error used by the Python sidecar when serializing failures.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ErrorBody {
     pub code: ErrorCode,
@@ -59,7 +53,6 @@ pub struct ErrorBody {
     pub retryable: bool,
 }
 
-/// Top-level parse / shape error for malformed lines on the wire.
 #[derive(Debug, Error)]
 pub enum WireError {
     #[error("malformed JSON line: {0}")]
