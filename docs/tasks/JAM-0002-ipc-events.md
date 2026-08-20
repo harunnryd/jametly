@@ -53,7 +53,7 @@ JAM-0001 established a request/reply JSON-RPC + NDJSON bridge, but the transport
 - [x] `cargo test -p jametly -- --nocapture` exits 0; the Rust bridge surfaces events through its event channel while preserving request/reply correlation and the existing echo behavior.
 - [x] The event channel is bounded by a named capacity constant and has an explicit overflow policy; the reader cannot grow an unbounded in-memory event collection.
 - [x] `just verify` exits 0.
-- [ ] `just verify-ci` exits 0 once for CI parity.
+- [x] `just verify-ci` exits 0 once for CI parity.
 - [ ] Coverage thresholds are not regressed: `core/ipc-proto` remains at least 90% line coverage, `src-tauri/` remains at least 70%, and Python coverage remains at or above the configured gate. **Partially met — `core/ipc-proto` 100% (was 100%), Python 95% (was 91.89%, gate 70%), but `src-tauri/` is 67.0% (was 45.0% on `main`). Not regressed — improved 22 points — yet still short of the documented 70%. `src-tauri/src/lib.rs` is 0% because the Tauri command surface needs `tauri::test::mock_app()` + `MockRuntime` per TEST_STRATEGY.md §2b, which requires making commands generic over `R: Runtime`. Flagged for `@tooling-owner`/`@rust-owner`; suggest a follow-up task rather than test-after code here.**
 - [x] Manual smoke with `debug.stream` emits the requested event lines followed by a parseable correlated reply:
 
@@ -67,13 +67,13 @@ JAM-0001 established a request/reply JSON-RPC + NDJSON bridge, but the transport
 
 - [ ] Every Acceptance Criterion above is checked.
 - [x] `just verify` exits 0 (PR gate).
-- [ ] `just verify-ci` exits 0 once (CI parity).
+- [x] `just verify-ci` exits 0 once (CI parity).
 - [x] Tests are written red first, then made green; the red and green stages are represented by separate commits or equivalent reviewable evidence.
 - [x] Coverage thresholds in `docs/conventions/TEST_STRATEGY.md` are not regressed (see the coverage AC above for the `src-tauri/` shortfall that predates this branch).
 - [x] `CHANGELOG.md` is updated under `Unreleased`.
-- [ ] PR is opened using `.github/PULL_REQUEST_TEMPLATE.md`, with CI green.
-- [ ] PR comments use labels from [`docs/conventions/CONVENTIONAL_COMMENTS.md`](../conventions/CONVENTIONAL_COMMENTS.md).
-- [ ] At least one CODEOWNERS reviewer is requested, including `@ipc-owner` for the schema change.
+- [ ] PR is opened using `.github/PULL_REQUEST_TEMPLATE.md`, with CI green. **PR #2 open; awaiting GitHub Actions.**
+- [x] PR comments use labels from [`docs/conventions/CONVENTIONAL_COMMENTS.md`](../conventions/CONVENTIONAL_COMMENTS.md).
+- [ ] At least one CODEOWNERS reviewer is requested, including `@ipc-owner` for the schema change. **Blocked: `@jametly/*` teams do not exist in the org, so `--add-reviewer` fails. Pings recorded in a PR comment instead.**
 - [ ] Task `status: closed` is set after the PR merges.
 - [x] No AI-authored comments restate the code.
 
