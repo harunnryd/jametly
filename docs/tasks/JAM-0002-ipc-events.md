@@ -71,7 +71,7 @@ JAM-0001 established a request/reply JSON-RPC + NDJSON bridge, but the transport
 - [x] Tests are written red first, then made green; the red and green stages are represented by separate commits or equivalent reviewable evidence.
 - [x] Coverage thresholds in `docs/conventions/TEST_STRATEGY.md` are not regressed (see the coverage AC above for the `src-tauri/` shortfall that predates this branch).
 - [x] `CHANGELOG.md` is updated under `Unreleased`.
-- [ ] PR is opened using `.github/PULL_REQUEST_TEMPLATE.md`, with CI green. **PR #2 open; awaiting GitHub Actions.**
+- [x] PR is opened using `.github/PULL_REQUEST_TEMPLATE.md`, with CI green. **PR #2; matrix green on macOS, Ubuntu, Windows at `a01fa3b`.**
 - [x] PR comments use labels from [`docs/conventions/CONVENTIONAL_COMMENTS.md`](../conventions/CONVENTIONAL_COMMENTS.md).
 - [ ] At least one CODEOWNERS reviewer is requested, including `@ipc-owner` for the schema change. **Blocked: `@jametly/*` teams do not exist in the org, so `--add-reviewer` fails. Pings recorded in a PR comment instead.**
 - [ ] Task `status: closed` is set after the PR merges.
