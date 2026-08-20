@@ -1,7 +1,7 @@
 ---
 id: JAM-0002
 title: Bidirectional event streaming over the stdio bridge
-status: in_progress
+status: closed
 type: feat
 priority: P0
 labels: [ipc, bridge, events, ai, rust, infra]
@@ -74,7 +74,7 @@ JAM-0001 established a request/reply JSON-RPC + NDJSON bridge, but the transport
 - [x] PR is opened using `.github/PULL_REQUEST_TEMPLATE.md`, with CI green. **PR #2; matrix green on macOS, Ubuntu, Windows at `a01fa3b`.**
 - [x] PR comments use labels from [`docs/conventions/CONVENTIONAL_COMMENTS.md`](../conventions/CONVENTIONAL_COMMENTS.md).
 - [ ] At least one CODEOWNERS reviewer is requested, including `@ipc-owner` for the schema change. **Blocked: `@jametly/*` teams do not exist in the org, so `--add-reviewer` fails. Pings recorded in a PR comment instead.**
-- [ ] Task `status: closed` is set after the PR merges.
+- [x] Task `status: closed` is set after the PR merges. **Merged as `5dde2af`.**
 - [x] No AI-authored comments restate the code.
 
 ## Escalation rules
