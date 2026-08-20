@@ -29,17 +29,17 @@ JAM-0002 establishes event routing, but the Python sidecar still uses a synchron
 
 ## Acceptance Criteria
 
-- [ ] Existing echo and `debug.stream` behavior remains compatible.
-- [ ] Multiple in-flight requests correlate to the correct replies.
-- [ ] Cancellation stops a running handler and emits a deterministic terminal event.
-- [ ] One slow handler cannot block unrelated requests or event delivery.
-- [ ] EOF and malformed input produce typed, testable outcomes.
-- [ ] `just verify` and `just verify-ci` pass.
+- [x] Existing echo and `debug.stream` behavior remains compatible. JAM-0002's `tests/unit/test_sidecar.py` and `tests/integration/test_bridge_events.py` pass unchanged against the async path; manual smoke output is byte-identical.
+- [x] Multiple in-flight requests correlate to the correct replies. Covered in-process (25 concurrent) and over the subprocess (10 concurrent).
+- [x] Cancellation stops a running handler and emits a deterministic terminal event: one `stream.event` with `kind: "cancelled"` **and** the correlated reply `{"cancelled": true}`, because events are lossy per `docs/architecture/01-ipc.md` backpressure.
+- [x] One slow handler cannot block unrelated requests or event delivery. The first implementation failed this over a real pipe — stdin was read on the event loop; `read_line` now offloads it. Caught by `tests/integration/test_bridge_async.py`, not by the StringIO unit tests.
+- [x] EOF and malformed input produce typed, testable outcomes. EOF cancels in-flight work deterministically; malformed input keeps JAM-0001's `PARSE_ERROR` with an empty `id`.
+- [x] `just verify` and `just verify-ci` pass.
 
 ## Definition of Done
 
-- [ ] Acceptance criteria checked, tests red-first, coverage not regressed, changelog updated, and PR CI green.
-- [ ] `@ipc-owner` review is requested for any wire-contract change.
+- [ ] Acceptance criteria checked, tests red-first, coverage not regressed, changelog updated, and PR CI green. **PR pending.**
+- [ ] `@ipc-owner` review is requested for any wire-contract change. **Required: this task adds the `cancelled` kind to the `stream.event` taxonomy and the `debug.sleep` diagnostic in `docs/architecture/01-ipc.md`, a file outside the declared scope list. `shared/schemas/ipc/v1.json` is untouched.**
 
 ## Escalation rules
 
