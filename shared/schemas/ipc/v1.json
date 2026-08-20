@@ -5,7 +5,8 @@
   "description": "Wire protocol between Rust host and Python AI sidecar over stdio JSON-RPC + NDJSON. Mirrored as serde structs in `core/ipc-proto/src/lib.rs` and as Pydantic models in `ai/src/jamly/protocol.py`. Any change here MUST land in both. The contract test in `core/ipc-proto/tests/protocol_contract.rs` will catch drift.",
   "oneOf": [
     { "$ref": "#/$defs/Request" },
-    { "$ref": "#/$defs/Reply" }
+    { "$ref": "#/$defs/Reply" },
+    { "$ref": "#/$defs/Event" }
   ],
   "$defs": {
     "Request": {
@@ -47,6 +48,29 @@
         { "required": ["result"], "properties": { "error": false } },
         { "required": ["error"], "properties": { "result": false } }
       ]
+    },
+    "Event": {
+      "description": "Python → Rust fire-and-forget notification. Never correlated: `id` is absent or null, and no reply is expected. Enumerated in `docs/architecture/01-ipc.md` under 'Event list'.",
+      "type": "object",
+      "required": ["method"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "null",
+          "description": "Absent or null. Present only so senders may emit an explicit null."
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9._-]*$",
+          "description": "Dot-namespaced event name, e.g. `stream.event`, `transcript.partial`, `audio.level`, `python.crash`."
+        },
+        "params": {
+          "type": "object",
+          "description": "Event-specific payload. Optional; defaults to {}.",
+          "additionalProperties": true
+        }
+      }
     },
     "ErrorBody": {
       "type": "object",
