@@ -1,0 +1,22 @@
+---
+source: core/ipc-proto/tests/protocol_contract.rs
+expression: envelopes
+---
+- id: req-1
+  method: chat.stream
+  params:
+    thread_id: t-1
+    user_text: hi
+- id: req-1
+  result:
+    stream_id: s-1
+- error:
+    code: PROVIDER_RATE_LIMIT
+    message: anthropic 429
+    retryable: true
+  id: req-2
+- method: stream.event
+  params:
+    correlation_id: req-1
+    data: he
+    kind: token

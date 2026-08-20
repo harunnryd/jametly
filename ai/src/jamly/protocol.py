@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ErrorCode(StrEnum):
@@ -28,6 +28,15 @@ class Request(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
 
 
+class Event(BaseModel):
+    """Fire-and-forget notification. Never correlated, never replied to."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    method: str
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
 class ErrorBody(BaseModel):
     """Error payload inside `Reply.error`."""
 
@@ -42,6 +51,12 @@ class Reply(BaseModel):
     id: str
     result: Any | None = None
     error: ErrorBody | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_payload(self) -> Reply:
+        if self.result is not None and self.error is not None:
+            raise ValueError("reply carries both `result` and `error`; exactly one is allowed")
+        return self
 
     def kind(self) -> Literal["ok", "err"]:
         return "ok" if self.error is None else "err"

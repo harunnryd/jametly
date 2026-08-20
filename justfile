@@ -147,6 +147,13 @@ verify-jam-0001:
     uv run --project ai pytest tests/integration/test_bridge_echo.py -v
     cargo test -p jametly -- --nocapture
 
+# Phase 0: full-duplex IPC — events and replies share one stdout stream.
+verify-jam-0002:
+    cargo test -p ipc-proto
+    uv run pytest tests/unit/test_sidecar.py -v
+    uv run pytest tests/integration/test_bridge_events.py -v
+    cargo test -p jametly -- --nocapture
+
 # ---- coverage -------------------------------------------------------------
 
 cov-rust:
