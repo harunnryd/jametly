@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Awaitable, Callable, TextIO
+from collections.abc import Callable
+from pathlib import Path
+from typing import Awaitable, TextIO
 
 from pydantic import ValidationError
 
 from .audio import handle_transcribe_audio
+from .config import AppConfig
 from .db import LocalStore
+from .llm import ProviderRegistry
 from .meetings.session import (
     handle_meeting_get,
     handle_meeting_list,
@@ -143,15 +147,50 @@ def meeting_handlers(store: LocalStore) -> dict[str, Handler]:
     }
 
 
+def chat_handlers(
+    config: AppConfig,
+    config_path: Path,
+    task_registry: TaskRegistry,
+    provider_registry: ProviderRegistry,
+) -> dict[str, Handler]:
+    from .agent.chat import (
+        handle_chat_cancel,
+        handle_chat_stream,
+        handle_providers_list,
+        handle_providers_set_selected,
+    )
+
+    return {
+        "chat.stream": lambda req, emit: handle_chat_stream(req, emit, config=config),
+        "chat.cancel": lambda req, emit: handle_chat_cancel(req, emit, task_registry=task_registry),
+        "providers.list": lambda req, emit: handle_providers_list(
+            req, emit, provider_registry=provider_registry
+        ),
+        "providers.set_selected": lambda req, emit: handle_providers_set_selected(
+            req, emit, config_path=config_path
+        ),
+    }
+
+
 class AsyncBridge:
     """Dispatches each request as its own task so one slow handler blocks nothing else."""
 
-    def __init__(self, outbound: OutboundStream, store: LocalStore | None = None) -> None:
+    def __init__(
+        self,
+        outbound: OutboundStream,
+        store: LocalStore | None = None,
+        config: AppConfig | None = None,
+        config_path: Path | None = None,
+    ) -> None:
         self.outbound = outbound
         self.registry = TaskRegistry()
         self.handlers: dict[str, Handler] = dict(DEFAULT_HANDLERS)
         if store is not None:
             self.handlers.update(meeting_handlers(store))
+        if config is not None and config_path is not None:
+            self.handlers.update(
+                chat_handlers(config, config_path, self.registry, ProviderRegistry())
+            )
         self._running: dict[str, asyncio.Event] = {}
 
     def dispatch(self, request: Request) -> asyncio.Task[None]:
@@ -232,8 +271,15 @@ async def read_line(stdin: TextIO) -> str:
     return await loop.run_in_executor(None, stdin.readline)
 
 
-async def serve(stdin: TextIO, stdout: TextIO, *, store: LocalStore | None = None) -> None:
-    bridge = AsyncBridge(OutboundStream(stdout), store=store)
+async def serve(
+    stdin: TextIO,
+    stdout: TextIO,
+    *,
+    store: LocalStore | None = None,
+    config: AppConfig | None = None,
+    config_path: Path | None = None,
+) -> None:
+    bridge = AsyncBridge(OutboundStream(stdout), store=store, config=config, config_path=config_path)
     if store is not None:
         from .meetings.session import recover_orphans
 
@@ -253,5 +299,12 @@ async def serve(stdin: TextIO, stdout: TextIO, *, store: LocalStore | None = Non
     await bridge.drain()
 
 
-def run(stdin: TextIO, stdout: TextIO, *, store: LocalStore | None = None) -> None:
-    asyncio.run(serve(stdin, stdout, store=store))
+def run(
+    stdin: TextIO,
+    stdout: TextIO,
+    *,
+    store: LocalStore | None = None,
+    config: AppConfig | None = None,
+    config_path: Path | None = None,
+) -> None:
+    asyncio.run(serve(stdin, stdout, store=store, config=config, config_path=config_path))
