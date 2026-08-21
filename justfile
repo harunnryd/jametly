@@ -152,6 +152,11 @@ verify-jam-0004:
     cargo test -p audio-backend -- --nocapture
     cargo clippy -p audio-backend --all-targets -- -D warnings
 
+# Screen capture contract: region validation, blob storage, cleanup, and deterministic mock.
+verify-jam-0005:
+    cargo test -p screen-capture -- --nocapture
+    cargo clippy -p screen-capture --all-targets -- -D warnings
+
 # Phase 0: full-duplex IPC — events and replies share one stdout stream.
 verify-jam-0002:
     cargo test -p ipc-proto

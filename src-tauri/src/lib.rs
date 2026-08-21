@@ -1,5 +1,6 @@
 pub mod audio;
 mod bridge;
+pub mod capture;
 
 mod commands {
     use super::*;

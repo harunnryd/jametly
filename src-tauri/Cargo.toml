@@ -29,6 +29,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 ipc-proto = { path = "../core/ipc-proto" }
 audio-backend = { path = "../core/audio-backend" }
+screen-capture = { path = "../core/screen-capture" }
 
 [features]
 default = ["custom-protocol"]

@@ -4,7 +4,7 @@ members = [
     "src-tauri",
     "core/ipc-proto",
     "core/audio-backend",
-    # core/screen-capture (Phase 1+)
+    "core/screen-capture",
     # core/sqlite-store (Phase 1+)
     # core/secure-store (Phase 1+)
     # core/stealth-macos (Phase 5+; opt-in)
@@ -39,7 +39,7 @@ repository = "https://github.com/jametly/jametly"
 
 # Screen capture (Phase 3+)
 # xcap    = "0.0.12"
-# image   = { version = "0.25", default-features = false }
+image   = { version = "0.25", default-features = false, features = ["png"] }
 
 # Async + utility
 tokio       = { version = "1", features = ["full"] }
