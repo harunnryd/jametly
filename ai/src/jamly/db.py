@@ -50,13 +50,13 @@ class LocalStore:
         if self.schema_version() == 0:
             self.connection.executescript(
                 """
-                CREATE TABLE meetings (
+                CREATE TABLE IF NOT EXISTS meetings (
                     id TEXT PRIMARY KEY,
                     title TEXT NOT NULL DEFAULT '',
                     started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     ended_at TEXT
                 );
-                CREATE TABLE utterances (
+                CREATE TABLE IF NOT EXISTS utterances (
                     id TEXT PRIMARY KEY,
                     meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
                     speaker TEXT NOT NULL,
@@ -65,38 +65,38 @@ class LocalStore:
                     end_ms INTEGER NOT NULL,
                     confidence REAL NOT NULL
                 );
-                CREATE VIRTUAL TABLE utterances_fts USING fts5(
+                CREATE VIRTUAL TABLE IF NOT EXISTS utterances_fts USING fts5(
                     text,
                     content='utterances',
                     content_rowid='rowid'
                 );
-                CREATE TRIGGER utterances_ai AFTER INSERT ON utterances BEGIN
+                CREATE TRIGGER IF NOT EXISTS utterances_ai AFTER INSERT ON utterances BEGIN
                     INSERT INTO utterances_fts(rowid, text) VALUES (new.rowid, new.text);
                 END;
-                CREATE TRIGGER utterances_ad AFTER DELETE ON utterances BEGIN
+                CREATE TRIGGER IF NOT EXISTS utterances_ad AFTER DELETE ON utterances BEGIN
                     INSERT INTO utterances_fts(utterances_fts, rowid, text)
                     VALUES ('delete', old.rowid, old.text);
                 END;
-                CREATE TRIGGER utterances_au AFTER UPDATE OF text ON utterances BEGIN
+                CREATE TRIGGER IF NOT EXISTS utterances_au AFTER UPDATE OF text ON utterances BEGIN
                     INSERT INTO utterances_fts(utterances_fts, rowid, text)
                     VALUES ('delete', old.rowid, old.text);
                     INSERT INTO utterances_fts(rowid, text) VALUES (new.rowid, new.text);
                 END;
-                CREATE TABLE messages (
+                CREATE TABLE IF NOT EXISTS messages (
                     id TEXT PRIMARY KEY,
                     meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
-                CREATE TABLE action_items (
+                CREATE TABLE IF NOT EXISTS action_items (
                     id TEXT PRIMARY KEY,
                     meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
                     body TEXT NOT NULL,
                     owner TEXT,
                     completed INTEGER NOT NULL DEFAULT 0
                 );
-                CREATE TABLE checkpoints (
+                CREATE TABLE IF NOT EXISTS checkpoints (
                     thread_id TEXT PRIMARY KEY,
                     payload TEXT NOT NULL,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -109,7 +109,7 @@ class LocalStore:
             self.connection.executescript(
                 """
                 ALTER TABLE utterances ADD COLUMN segment_id TEXT NOT NULL DEFAULT '';
-                CREATE INDEX utterances_segment_id_idx ON utterances(segment_id);
+                CREATE INDEX IF NOT EXISTS utterances_segment_id_idx ON utterances(segment_id);
                 PRAGMA user_version = 2;
                 """
             )
