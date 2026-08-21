@@ -163,6 +163,10 @@ verify-jam-0006:
     cargo clippy -p secure-store --all-targets -- -D warnings
     uv run pytest tests/unit/test_config.py -q --no-header
 
+# SQLite store contract: migrations, repositories, FTS5 search, and rollback.
+verify-jam-0007:
+    uv run pytest tests/unit/test_db.py tests/integration/test_db_roundtrip.py -q --no-header
+
 # Phase 0: full-duplex IPC — events and replies share one stdout stream.
 verify-jam-0002:
     cargo test -p ipc-proto
