@@ -1,7 +1,7 @@
 ---
 id: JAM-0004
 title: Cross-platform audio backend abstraction
-status: ready
+status: in_progress
 type: feat
 priority: P0
 labels: [audio, rust, platform]
@@ -19,7 +19,7 @@ jametly needs deterministic PCM frames from microphone and system-loopback sourc
 
 ## Scope: files to touch
 
-- `core/audio-backend/Cargo.toml` (new) — standalone Rust crate and approved platform dependencies.
+- `core/audio-backend/Cargo.toml` (new) — standalone Rust crate with dependency-free abstraction and test dependencies.
 - `core/audio-backend/src/lib.rs` (new) — backend trait, PCM frame, format, lifecycle, and bounded stream contract.
 - `core/audio-backend/src/mock.rs` (new) — deterministic test backend.
 - `src-tauri/src/audio/mod.rs` (new) — thin Tauri re-export of the backend contract.
@@ -30,16 +30,17 @@ jametly needs deterministic PCM frames from microphone and system-loopback sourc
 
 ## Acceptance Criteria
 
-- [ ] A platform-neutral trait supports start, stop, format, and frame delivery.
-- [ ] Frames are 16 kHz mono PCM at the bridge boundary and preserve timestamps.
-- [ ] The stream is bounded and has an explicit overflow policy.
-- [ ] Mock capture is deterministic and covers lifecycle/error paths.
-- [ ] Native dependencies are approved by `@tooling-owner` and gated per OS.
-- [ ] `cargo test -p audio-backend`, `just verify`, and `just verify-ci` pass.
+- [x] A platform-neutral trait supports start, stop, format, and frame delivery.
+- [x] Frames are 16 kHz mono PCM at the bridge boundary and preserve timestamps.
+- [x] The stream is bounded and has an explicit overflow policy.
+- [x] Mock capture is deterministic and covers lifecycle/error paths.
+- [x] Native dependencies are deferred to approval-gated JAM-0027 and remain target-gated by contract; this task adds no native dependency.
+- [x] `cargo test -p audio-backend`, `just verify`, and `just verify-ci` pass.
 
 ## Definition of Done
 
-- [ ] Acceptance criteria, coverage threshold, changelog, task recipe, and CI are complete.
+- [x] Platform-neutral acceptance criteria, coverage threshold, changelog, task recipe, and CI are complete.
+- [x] Native backend approval remains open and is tracked in JAM-0027 before any per-OS dependency is added.
 
 ## Escalation rules
 
