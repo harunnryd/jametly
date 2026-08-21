@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import math
+import os
+import socket
 import wave
 from collections.abc import Iterator
 from pathlib import Path
+from urllib.parse import urlparse
 
 import numpy as np
 from numpy.typing import NDArray
@@ -68,3 +71,15 @@ def write_wav(path: Path, samples: list[int], *, sample_rate: int = BRIDGE_SAMPL
         handle.setframerate(sample_rate)
         handle.writeframes(np.asarray(samples, dtype="<i2").tobytes())
     return path
+
+
+def ollama_reachable(url: str | None = None, *, timeout: float = 2.0) -> bool:
+    target = url or os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+    parsed = urlparse(target)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
