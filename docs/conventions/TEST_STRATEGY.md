@@ -248,6 +248,28 @@ Tied to `STYLE.md` "AI-authored comments":
 - A Claude Code `PreToolUse` hook (`strip-restate-comments.sh`) flags LLM-flavored comment prefixes ("First, we…", "Now we…", "This function…").
 - Apply Beck's test in review: *add a comment you wish you had / remove a comment that just says what the code says*.
 
+## 7. Network + dependency-gated tests
+
+Integration tests that hit a **live external dependency** (local Ollama server, OS keychain, etc.) are annotated `@pytest.mark.network`. `just verify` runs `pytest -m "not slow and not network"`, so these tests must skip cleanly in CI without the dependency present.
+
+**Marker discipline — per-test, not module-level.** A module-level marker skips every test in the file, including the 30+ cheap subprocess round-trips in `tests/integration/` that don't touch a real provider. Per-test markers keep the cheap layer fast while gating only the 3 tests that actually need Ollama.
+
+**Probe-with-diagnostic on `-m network`.** When a developer runs `pytest -m network` without Ollama running, `tests/conftest.py::pytest_collection_modifyitems` does a single TCP connect to `$OLLAMA_BASE_URL` (default `http://localhost:11434`) and skips the network-marked tests with:
+
+```
+Ollama not reachable at http://localhost:11434;
+set OLLAMA_BASE_URL or run `ollama serve`
+```
+
+The probe is **TCP-only**, not HTTP — it costs ~1 ms and avoids coupling to Ollama's API version. The probe runs **only when at least one collected item has the network marker**, so the common `-m "not network"` path adds zero overhead.
+
+**Adding a new network-gated test:**
+1. Decorate the test: `@pytest.mark.network`.
+2. If it depends on a non-Ollama provider (e.g. a future remote API), add an explicit reachability check inside the test body — don't piggyback on the Ollama probe.
+3. Run `just py-test-fast` to confirm the test is deselected. Then run `pytest -m network -v` to confirm it runs (or skips with the diagnostic) under the local config.
+
+**Why this matters in production.** Without the marker, `just verify` spawns the sidecar → sidecar tries to connect to Ollama → connect times out at the sidecar's `wait_for(deadline_s)` ceiling → the test reports a hang instead of a skip. The marker discipline is the only thing keeping the Tier-0 PR gate under its 3-minute budget.
+
 ---
 
 ## References
