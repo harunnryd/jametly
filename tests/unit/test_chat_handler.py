@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Awaitable, Callable
+import tomllib
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence  # noqa: F401
 from pathlib import Path
+from typing import Any
 
 import pytest
+from langchain_core.language_models import BaseChatModel
+from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
+from langchain_core.outputs import ChatGenerationChunk
 
 from jamly.agent.chat import (
     ProviderAuthError,
@@ -19,8 +25,7 @@ from jamly.agent.chat import (
     stream_event,
 )
 from jamly.config import AppConfig, save_config
-from jamly.llm import ChatMessage, ChatModel, ProviderRegistry, build_chat_model
-from jamly.llm.fake import FakeChatModel
+from jamly.llm import ChatMessage, ProviderRegistry, build_chat_model
 from jamly.protocol import ErrorCode, Event, Reply, Request
 
 
@@ -38,25 +43,80 @@ class EventRecorder:
         return [event.params["data"] for event in self.of_kind("chat.token")]
 
 
+class _ChunkedFakeChatModel(BaseChatModel):
+    _tokens: tuple[str, ...]
+
+    def __init__(self, tokens: tuple[str, ...]) -> None:
+        super().__init__()
+        self._tokens = tokens
+
+    @property
+    def _llm_type(self) -> str:
+        return "chunked-fake"
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        joined = " ".join(str(getattr(m, "content", "")) for m in messages)
+        return AIMessage(content=joined)
+
+    async def _astream(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[ChatGenerationChunk]:
+        for token in self._tokens:
+            yield ChatGenerationChunk(
+                message=AIMessageChunk(content=token),
+                text=token,
+            )
+
+
 def _fake_factory(
-    tokens: tuple[str, ...] = ("hello", "there"), **kwargs: object
-) -> Callable[..., ChatModel]:
-    def factory(provider_id: str, *, model_name: str) -> ChatModel:
-        return FakeChatModel(
-            tokens=tokens,
-            provider_id=provider_id,
-            model_name=model_name,
-            **kwargs,
-        )
+    tokens: tuple[str, ...] = ("hello", "there"),
+) -> Callable[..., BaseChatModel]:
+    def factory(provider_id: str, *, model_name: str) -> BaseChatModel:
+        return _ChunkedFakeChatModel(tokens)
 
     return factory
 
 
-def _store_factory(model: FakeChatModel):
-    def factory(provider_id: str, *, model_name: str) -> ChatModel:
-        model.provider_id = provider_id
-        model.model_name = model_name
-        return model
+class _RaisingChatModel(BaseChatModel):
+    _error: BaseException
+
+    def __init__(self, error: BaseException) -> None:
+        super().__init__()
+        self._error = error
+
+    @property
+    def _llm_type(self) -> str:
+        return "raising"
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        raise self._error
+
+    async def _astream(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[ChatGenerationChunk]:
+        raise self._error
+        yield ChatGenerationChunk(message=AIMessageChunk(content=""), text="")
+
+
+def _raising_factory(error: BaseException) -> Callable[..., BaseChatModel]:
+    def factory(provider_id: str, *, model_name: str) -> BaseChatModel:
+        return _RaisingChatModel(error)
 
     return factory
 
@@ -160,13 +220,44 @@ async def test_chat_stream_enforces_a_deadline_and_returns_python_timeout() -> N
     )
     emit = EventRecorder()
 
+    async def slow_stream(*_: object, **__: object) -> AsyncIterator[str]:
+        for piece in ("a", "b", "c"):
+            await asyncio.sleep(0.05)
+            yield piece
+
+    class _SlowChatModel(BaseChatModel):
+        async def _astream(
+            self,
+            messages: list[BaseMessage],
+            stop: list[str] | None = None,
+            **kwargs: Any,
+        ) -> AsyncIterator[ChatGenerationChunk]:
+            async for piece in slow_stream():
+                yield ChatGenerationChunk(
+                    message=AIMessageChunk(content=piece),
+                    text=piece,
+                )
+
+        def _generate(
+            self,
+            messages: list[BaseMessage],
+            stop: list[str] | None = None,
+            **kwargs: Any,
+        ) -> Any:
+            raise NotImplementedError
+
+        @property
+        def _llm_type(self) -> str:
+            return "slow"
+
+    def slow_factory(*_: object, **__: object) -> BaseChatModel:
+        return _SlowChatModel()
+
     reply = await handle_chat_stream(
         request,
         emit,
         config=_config(),
-        model_factory=lambda *_, **__: FakeChatModel(
-            tokens=("a", "b", "c"), delay_ms=50
-        ),
+        model_factory=slow_factory,
     )
 
     assert reply.error is not None
@@ -189,27 +280,18 @@ async def test_chat_stream_maps_canonical_provider_errors() -> None:
     ]
 
     for exc, expected in cases:
-        def factory(*_: object, **__: object) -> ChatModel:
-            class _Boom:
-                provider_id = "boom"
-                model_name = "m"
-
-                async def stream(self_inner, messages: object):
-                    raise exc
-                    yield ""
-
-                def invoke(self_inner, messages: object) -> str:
-                    raise exc
-
-            return _Boom()
-
         request = Request(
             id=f"err-{expected.value}",
             method="chat.stream",
             params={"messages": [{"role": "user", "content": "x"}]},
         )
         emit = EventRecorder()
-        reply = await handle_chat_stream(request, emit, config=_config(), model_factory=factory)
+        reply = await handle_chat_stream(
+            request,
+            emit,
+            config=_config(),
+            model_factory=_raising_factory(exc),
+        )
 
         assert reply.error is not None, f"{expected.value} did not error"
         assert reply.error.code == expected, f"{expected.value} mapped wrong"
@@ -285,7 +367,7 @@ async def test_providers_set_selected_persists_to_config_toml(tmp_path: Path) ->
     assert reply.result == {"kind": "ai", "provider_id": "ollama"}
 
     reloaded = AppConfig.model_validate(
-        json.loads(json.dumps(__import__("tomllib").loads(config_path.read_text())))
+        json.loads(json.dumps(tomllib.loads(config_path.read_text())))
     )
     assert reloaded.ai_provider == "ollama"
 
