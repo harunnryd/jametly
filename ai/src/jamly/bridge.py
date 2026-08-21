@@ -7,6 +7,13 @@ from typing import Awaitable, Callable, TextIO
 from pydantic import ValidationError
 
 from .audio import handle_transcribe_audio
+from .db import LocalStore
+from .meetings.session import (
+    handle_meeting_get,
+    handle_meeting_list,
+    handle_meeting_start,
+    handle_meeting_stop,
+)
 from .protocol import ErrorBody, ErrorCode, Event, Reply, Request
 
 STREAM_EVENT = "stream.event"
@@ -127,13 +134,24 @@ DEFAULT_HANDLERS: dict[str, Handler] = {
 }
 
 
+def meeting_handlers(store: LocalStore) -> dict[str, Handler]:
+    return {
+        "meeting.start": lambda req, emit: handle_meeting_start(req, emit, store=store),
+        "meeting.stop": lambda req, emit: handle_meeting_stop(req, emit, store=store),
+        "meeting.list": lambda req, emit: handle_meeting_list(req, emit, store=store),
+        "meeting.get": lambda req, emit: handle_meeting_get(req, emit, store=store),
+    }
+
+
 class AsyncBridge:
     """Dispatches each request as its own task so one slow handler blocks nothing else."""
 
-    def __init__(self, outbound: OutboundStream) -> None:
+    def __init__(self, outbound: OutboundStream, store: LocalStore | None = None) -> None:
         self.outbound = outbound
         self.registry = TaskRegistry()
         self.handlers: dict[str, Handler] = dict(DEFAULT_HANDLERS)
+        if store is not None:
+            self.handlers.update(meeting_handlers(store))
         self._running: dict[str, asyncio.Event] = {}
 
     def dispatch(self, request: Request) -> asyncio.Task[None]:
@@ -214,8 +232,12 @@ async def read_line(stdin: TextIO) -> str:
     return await loop.run_in_executor(None, stdin.readline)
 
 
-async def serve(stdin: TextIO, stdout: TextIO) -> None:
-    bridge = AsyncBridge(OutboundStream(stdout))
+async def serve(stdin: TextIO, stdout: TextIO, *, store: LocalStore | None = None) -> None:
+    bridge = AsyncBridge(OutboundStream(stdout), store=store)
+    if store is not None:
+        from .meetings.session import recover_orphans
+
+        await recover_orphans(store, bridge.outbound.send)
     while True:
         raw = await read_line(stdin)
         if not raw:
@@ -231,5 +253,5 @@ async def serve(stdin: TextIO, stdout: TextIO) -> None:
     await bridge.drain()
 
 
-def run(stdin: TextIO, stdout: TextIO) -> None:
-    asyncio.run(serve(stdin, stdout))
+def run(stdin: TextIO, stdout: TextIO, *, store: LocalStore | None = None) -> None:
+    asyncio.run(serve(stdin, stdout, store=store))
