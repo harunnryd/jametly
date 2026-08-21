@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessageChunk, BaseMessage
+from langchain_core.outputs import ChatGenerationChunk
 
 from jamly.agent import ask as ask_mod
 from jamly.agent.ask import (
@@ -16,15 +20,13 @@ from jamly.agent.ask import (
     ASK_TOKEN,
     ASK_TOOL_CALL,
     ASK_TOOL_RESULT,
-    AskState,
+    AskGraphState,
     handle_ask_cancel,
     handle_ask_stream,
 )
-from jamly.agent.tools import TOOL_REGISTRY, ToolMutationError, ToolSpec, UnknownToolError, invoke_tool
+from jamly.agent.tools import TOOL_REGISTRY, ToolMutationError, ToolSpec, UnknownToolError
 from jamly.config import AppConfig
 from jamly.db import LocalStore
-from jamly.llm import ChatMessage, ChatModel
-from jamly.llm.fake import FakeChatModel
 from jamly.protocol import ErrorCode, Event, Reply, Request
 
 
@@ -45,17 +47,54 @@ class EventRecorder:
         return [event.params for event in self.of_kind("ask.citation")]
 
 
+class _ChunkedFakeChatModel(BaseChatModel):
+    _tokens: tuple[str, ...]
+    _delay_ms: int
+
+    def __init__(
+        self,
+        tokens: tuple[str, ...] = ("the", "answer"),
+        delay_ms: int = 0,
+    ) -> None:
+        super().__init__()
+        self._tokens = tokens
+        self._delay_ms = delay_ms
+
+    @property
+    def _llm_type(self) -> str:
+        return "ask-chunked-fake"
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        joined = " ".join(str(getattr(m, "content", "")) for m in messages)
+        from langchain_core.messages import AIMessage
+        return AIMessage(content=joined)
+
+    async def _astream(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[ChatGenerationChunk]:
+        for token in self._tokens:
+            if self._delay_ms:
+                await asyncio.sleep(self._delay_ms / 1000)
+            yield ChatGenerationChunk(
+                message=AIMessageChunk(content=token),
+                text=token,
+            )
+
+
 def _fake_factory(
     tokens: tuple[str, ...] = ("the", "answer"),
-    **kwargs: object,
-) -> Callable[..., ChatModel]:
-    def factory(provider_id: str, *, model_name: str) -> ChatModel:
-        return FakeChatModel(
-            tokens=tokens,
-            provider_id=provider_id,
-            model_name=model_name,
-            **kwargs,
-        )
+    delay_ms: int = 0,
+) -> Callable[..., BaseChatModel]:
+    def factory(provider_id: str, *, model_name: str) -> BaseChatModel:
+        return _ChunkedFakeChatModel(tokens=tokens, delay_ms=delay_ms)
 
     return factory
 
@@ -219,19 +258,8 @@ async def test_emits_citation_events_for_each_in_scope_utterance(tmp_path: Path)
         assert [c["text_preview"] for c in citations] == ["first line", "second line", "third line"]
         assert all(c["thread_id"] == "th-fixed" for c in citations)
         assert all("utterance_id" in c for c in citations)
-        assert reply_payload_is_serializable(citations)
     finally:
         store.close()
-
-
-def reply_payload_is_serializable(payload) -> bool:
-    from pydantic import BaseModel
-    try:
-        if isinstance(payload, BaseModel):
-            payload.model_dump(mode="json")
-        return True
-    except Exception:
-        return False
 
 
 async def test_save_state_persists_for_next_call(tmp_path: Path) -> None:
@@ -270,11 +298,9 @@ async def test_deadline_triggers_python_timeout(tmp_path: Path) -> None:
         meeting_id = _seed_meeting_with(store)
 
         def slow_factory(provider_id, *, model_name):
-            return FakeChatModel(
+            return _ChunkedFakeChatModel(
                 tokens=("a", "b", "c", "d", "e"),
                 delay_ms=200,
-                provider_id=provider_id,
-                model_name=model_name,
             )
 
         emit = EventRecorder()
@@ -401,6 +427,34 @@ async def test_unknown_provider_during_stream_surfaces_canonical_error(tmp_path:
         meeting_id = _seed_meeting_with(store)
         from jamly.agent.chat import ProviderAuthError
 
+        class _RaisingChatModel(BaseChatModel):
+            _error: BaseException
+
+            def __init__(self, error: BaseException) -> None:
+                super().__init__()
+                self._error = error
+
+            @property
+            def _llm_type(self) -> str:
+                return "raising"
+
+            def _generate(
+                self,
+                messages: list[BaseMessage],
+                stop: list[str] | None = None,
+                **kwargs: Any,
+            ) -> Any:
+                raise self._error
+
+            async def _astream(
+                self,
+                messages: list[BaseMessage],
+                stop: list[str] | None = None,
+                **kwargs: Any,
+            ) -> AsyncIterator[ChatGenerationChunk]:
+                raise self._error
+                yield ChatGenerationChunk(message=AIMessageChunk(content=""), text="")
+
         def raise_factory(provider_id, *, model_name):
             return _RaisingChatModel(error=ProviderAuthError("missing creds"))
 
@@ -450,20 +504,25 @@ class _StubRegistry:
         return 0
 
 
-class _RaisingChatModel:
-    def __init__(self, error: BaseException) -> None:
-        self._error = error
-        self.provider_id = "fake"
-        self.model_name = "fake"
-
-    async def stream(self, messages):
-        raise self._error
-        yield ""
-
-    def invoke(self, messages):
-        raise self._error
-
-
 def test_ask_stream_handler_is_exported_from_agent_package() -> None:
     assert callable(ask_mod.handle_ask_stream)
     assert callable(ask_mod.handle_ask_cancel)
+
+
+def test_ask_graph_state_typed_dict_has_required_keys() -> None:
+    from typing import get_type_hints
+    hints = get_type_hints(AskGraphState)
+    assert "thread_id" in hints
+    assert "meeting_id" in hints
+    assert "question" in hints
+    assert "context" in hints
+    assert "messages" in hints
+    assert "answer" in hints
+    assert "context_utterance_ids" in hints
+
+
+def test_search_history_is_registered_as_langchain_structured_tool() -> None:
+    from jamly.agent.tools import search_history as sh
+    assert type(sh).__name__ == "StructuredTool"
+    assert sh.name == "search_history"
+    assert sh.description
