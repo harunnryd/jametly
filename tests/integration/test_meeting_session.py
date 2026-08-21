@@ -1,32 +1,34 @@
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import shutil
+import sqlite3
 import subprocess
 import time
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SIDECAR_HOME = REPO_ROOT / ".tmp" / "jametly-meeting-session-tests"
 
 
 @pytest.fixture
-def fresh_home() -> Path:
-    if SIDECAR_HOME.exists():
-        shutil.rmtree(SIDECAR_HOME)
-    SIDECAR_HOME.mkdir(parents=True)
-    return SIDECAR_HOME
+def fresh_home(tmp_path: Path) -> Path:
+    home = tmp_path / "jametly-home"
+    home.mkdir(parents=True)
+    return home
 
 
 @pytest.fixture
-def sidecar(fresh_home: Path) -> subprocess.Popen:
+def sidecar(fresh_home: Path) -> Iterator[subprocess.Popen]:
     uv = shutil.which("uv")
     if uv is None:
         pytest.skip("`uv` not on PATH; install https://docs.astral.sh/uv/")
     env = {
-        **__import__("os").environ,
+        **os.environ,
         "JAMETLY_HOME": str(fresh_home),
         "PYTHONPATH": str(REPO_ROOT / "ai" / "src"),
     }
@@ -48,6 +50,10 @@ def sidecar(fresh_home: Path) -> subprocess.Popen:
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait(timeout=5)
+        for handle in (proc.stdin, proc.stdout, proc.stderr):
+            if handle is not None:
+                with contextlib.suppress(Exception):
+                    handle.close()
 
 
 def _send(proc: subprocess.Popen, payload: dict) -> None:
@@ -145,11 +151,9 @@ def test_cold_start_writes_a_recovery_checkpoint_for_an_orphan(
     if uv is None:
         pytest.skip("`uv` not on PATH; install https://docs.astral.sh/uv/")
 
-    env = {**__import__("os").environ, "JAMETLY_HOME": str(fresh_home)}
+    env = {**os.environ, "JAMETLY_HOME": str(fresh_home)}
     db_path = fresh_home / ".config" / "jametly" / "jametly.sqlite"
     db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    import sqlite3
 
     raw = sqlite3.connect(db_path)
     raw.executescript(
