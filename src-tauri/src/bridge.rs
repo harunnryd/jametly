@@ -90,6 +90,12 @@ pub struct Sidecar {
 
 impl Sidecar {
     pub async fn spawn() -> Result<Self, BridgeError> {
+        Self::spawn_with_env(HashMap::new()).await
+    }
+
+    pub async fn spawn_with_env(
+        extra_env: HashMap<String, String>,
+    ) -> Result<Self, BridgeError> {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let repo_root = std::path::Path::new(manifest_dir)
             .parent()
@@ -101,6 +107,7 @@ impl Sidecar {
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .kill_on_drop(true)
+            .envs(extra_env)
             .spawn()
             .map_err(|e| BridgeError::Spawn(e.to_string()))?;
         let stdin = child.stdin.take().expect("stdin piped");
@@ -170,9 +177,39 @@ mod tests {
     use serde_json::json;
     use std::time::Duration;
 
+    static SCRATCH_SEQ: AtomicU64 = AtomicU64::new(0);
+
+    struct ScratchHome(std::path::PathBuf);
+    impl ScratchHome {
+        fn new() -> Self {
+            let n = SCRATCH_SEQ.fetch_add(1, Ordering::Relaxed);
+            let dir = std::env::temp_dir().join(format!(
+                "jametly-bridge-{}-{n}",
+                std::process::id()
+            ));
+            std::fs::create_dir_all(&dir).expect("scratch dir");
+            Self(dir)
+        }
+    }
+    impl Drop for ScratchHome {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    async fn spawn_isolated() -> Sidecar {
+        let home = ScratchHome::new();
+        Sidecar::spawn_with_env(HashMap::from([(
+            "JAMETLY_HOME".into(),
+            home.0.to_string_lossy().into_owned(),
+        )]))
+        .await
+        .expect("sidecar should spawn")
+    }
+
     #[tokio::test]
     async fn sidecar_echo_round_trip() {
-        let mut sidecar = Sidecar::spawn().await.expect("sidecar should spawn");
+        let mut sidecar = spawn_isolated().await;
         let reply = sidecar
             .request(Request {
                 id: "rust-test".into(),
@@ -193,7 +230,7 @@ mod tests {
 
     #[tokio::test]
     async fn sidecar_surfaces_events_through_the_event_channel() {
-        let mut sidecar = Sidecar::spawn().await.expect("sidecar should spawn");
+        let mut sidecar = spawn_isolated().await;
         let mut events = sidecar
             .take_events()
             .expect("event receiver is available once");
@@ -231,14 +268,14 @@ mod tests {
 
     #[tokio::test]
     async fn event_receiver_is_only_handed_out_once() {
-        let mut sidecar = Sidecar::spawn().await.expect("sidecar should spawn");
+        let mut sidecar = spawn_isolated().await;
         assert!(sidecar.take_events().is_some());
         assert!(sidecar.take_events().is_none());
     }
 
     #[tokio::test]
     async fn events_do_not_break_reply_correlation() {
-        let mut sidecar = Sidecar::spawn().await.expect("sidecar should spawn");
+        let mut sidecar = spawn_isolated().await;
         let _events = sidecar.take_events();
 
         for i in 0..3 {
