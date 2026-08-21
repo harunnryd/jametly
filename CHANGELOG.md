@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **SQLite meeting store** (`JAM-0007-sqlite-store`): Python-owned standard-library SQLite schema with versioned migrations, meetings/utterances/messages/action items, FTS5 search, bounded results, transaction rollback, and no telemetry tables. Vector search and the Rust read-cache remain approval-gated in JAM-0031/JAM-0032.
 - **Secure config contract** (`JAM-0006-secure-config`): Rust-owned provider-secret namespace, non-disclosing typed errors, deterministic in-memory secret store, and strict Python configuration defaults under `~/.config/jametly/`. Native OS keychains and atomic TOML persistence remain approval-gated in JAM-0029 and JAM-0030.
 - **Screen capture abstraction** (`JAM-0005-screen-capture`): standalone Rust capture contract with overflow-safe region validation, deterministic RGBA mock capture, sanitized permission/unavailable errors, confined PNG blob output, and stale-blob cleanup. Native xcap monitor capture remains approval-gated in JAM-0028.
 - **Audio backend abstraction** (`JAM-0004-audio-backend`): standalone Rust audio contract with 16 kHz mono PCM frames, monotonic timestamps, bounded drop-newest frame delivery, deterministic mock capture, lifecycle/device-loss errors, and chunking property tests. Native microphone/loopback drivers remain approval-gated in JAM-0027.
