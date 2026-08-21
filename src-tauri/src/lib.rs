@@ -1,6 +1,7 @@
 pub mod audio;
 mod bridge;
 pub mod capture;
+pub mod secure_store;
 
 mod commands {
     use super::*;

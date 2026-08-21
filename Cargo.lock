@@ -1624,6 +1624,7 @@ dependencies = [
  "audio-backend",
  "ipc-proto",
  "screen-capture",
+ "secure-store",
  "serde",
  "serde_json",
  "tauri",
@@ -2852,6 +2853,13 @@ version = "0.0.0"
 dependencies = [
  "image",
  "tempfile",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "secure-store"
+version = "0.0.0"
+dependencies = [
  "thiserror 1.0.69",
 ]
 
