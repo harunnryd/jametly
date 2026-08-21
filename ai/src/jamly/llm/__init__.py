@@ -1,19 +1,21 @@
 from __future__ import annotations
 
+from langchain_core.language_models import BaseChatModel
+
 from .base import (
     ChatMessage,
-    ChatModel,
-    ChatModelABC,
     ProviderInfo,
     ProviderKind,
     ProviderRegistry,
     build_chat_model,
 )
 
+ChatModel = BaseChatModel
+
 __all__ = [
+    "BaseChatModel",
     "ChatMessage",
     "ChatModel",
-    "ChatModelABC",
     "ProviderInfo",
     "ProviderKind",
     "ProviderRegistry",
