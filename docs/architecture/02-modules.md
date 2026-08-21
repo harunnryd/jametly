@@ -65,8 +65,9 @@
 | `ai/src/jamly/agent/__init__.py` | Ask graph, meeting graph, follow-up sub, Q&A sub |
 | `ai/src/jamly/agent/tools.py` | `@tool` defs: `screenshot`, `take_clipboard`, `search_history`, `switch_provider`, `run_stt` |
 | `ai/src/jamly/agent/checkpoint.py` | `SqliteSaver` factory + thread_id utils |
-| `ai/src/jamly/db.py` | SQLAlchemy 2.0 + sqlite-vec + FTS5 |
-| `ai/src/jamly/meetings/__init__.py` | Post-process pipeline |
+| `ai/src/jamly/db.py` | Local SQLite store + FTS5 search |
+| `ai/src/jamly/meetings/__init__.py` | Package marker |
+| `ai/src/jamly/meetings/session.py` | Meeting session lifecycle, `meeting.*` IPC handlers, cold-start recovery |
 | `ai/src/jamly/meetings/summarizer.py` | LCEL + `with_structured_output(MeetingSummary)` |
 | `ai/src/jamly/meetings/extractor.py` | `with_structured_output(ActionItems)` with `source_utterance_ids` |
 | `ai/src/jamly/meetings/exporters/` | `pysrt`, `webvtt-py`, `weasyprint`, `pydantic.md/json` |
@@ -97,7 +98,7 @@
 ```
 tests/
 ├── README.md                  # naming conventions, marker table
-├── conftest.py                # shared pytest fixtures (httpx_mock, sidecar stub, VCR)
+├── conftest.py                # shared pytest fixtures (added when integration fixtures land)
 ├── unit/                      # fast python unit tests (fakes for LLM)
 ├── property/                  # Hypothesis invariants (IPC envelope, STT bounds)
 ├── snapshot/                  # syrupy fixtures (prompts, transcript exports)
