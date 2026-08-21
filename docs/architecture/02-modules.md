@@ -62,9 +62,11 @@
 | `ai/src/jamly/stt/groq_whisper.py` | Groq REST (high-throughput fallback) |
 | `ai/src/jamly/stt/custom.py` | User-paste cURL STT providers |
 | `ai/src/jamly/diar/__init__.py` | `DiartLive` + `PyannotePostProcess`; speaker name binding |
-| `ai/src/jamly/agent/__init__.py` | Ask graph, meeting graph, follow-up sub, Q&A sub |
-| `ai/src/jamly/agent/tools.py` | `@tool` defs: `screenshot`, `take_clipboard`, `search_history`, `switch_provider`, `run_stt` |
-| `ai/src/jamly/agent/checkpoint.py` | `SqliteSaver` factory + thread_id utils |
+| `ai/src/jamly/agent/__init__.py` | Ask pipeline, tools registry, checkpoint load/save, re-exports |
+| `ai/src/jamly/agent/state.py` | `Citation` + `AskState` pydantic models for the Ask pipeline |
+| `ai/src/jamly/agent/ask.py` | `ask.stream` / `ask.cancel` handlers, bounded rolling transcript context, citation emission, tool-path dispatch, `PYTHON_TIMEOUT` via `asyncio.wait_for`, canonical error mapping |
+| `ai/src/jamly/agent/tools.py` | `ToolSpec` registry + read-only `search_history` tool with `mutates` gate; mutating tools rejected by ask handlers |
+| `ai/src/jamly/agent/checkpoint.py` | `load_ask_state` / `save_ask_state` against the existing `checkpoints` table; one row per meeting, multi-session payload |
 | `ai/src/jamly/db.py` | Local SQLite store + FTS5 search |
 | `ai/src/jamly/llm/__init__.py` | `ProviderRegistry`, `build_chat_model`, `ProviderInfo`, `ChatMessage`, `ChatModel` protocol |
 | `ai/src/jamly/llm/base.py` | Built-in `ollama` / `faster-whisper` providers, provider-info pydantic, chat-model ABC |
