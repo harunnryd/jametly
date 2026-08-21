@@ -5,6 +5,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
+import httpx
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessageChunk, BaseMessage, HumanMessage, SystemMessage
 
@@ -72,6 +73,11 @@ def _classify_provider_error(exc: BaseException) -> tuple[ErrorCode, str]:
         return ErrorCode.PROVIDER_UNAVAILABLE, str(exc)
     if isinstance(exc, ProviderMalformedResponseError):
         return ErrorCode.PARSE_ERROR, str(exc)
+    if isinstance(
+        exc,
+        (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError, ConnectionRefusedError),
+    ):
+        return ErrorCode.PROVIDER_UNAVAILABLE, f"{type(exc).__name__}: {exc}"
     return ErrorCode.INTERNAL, f"{type(exc).__name__}: {exc}"
 
 
