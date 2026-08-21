@@ -171,6 +171,7 @@ def _read_reply(proc: subprocess.Popen, timeout: float = 15.0) -> tuple[dict, li
         events.append(line)
 
 
+@pytest.mark.network
 def test_ask_stream_round_trip_with_seeded_meeting(
     seeded_home: tuple[Path, str],
 ) -> None:
@@ -326,6 +327,7 @@ def test_ask_cancel_unknown_thread_returns_zero(sidecar: subprocess.Popen) -> No
     assert reply["result"] == {"thread_id": "nope", "cancelled": 0}
 
 
+@pytest.mark.network
 def test_ask_stream_checkpoint_survives_sidecar_restart(
     seeded_home: tuple[Path, str],
 ) -> None:
