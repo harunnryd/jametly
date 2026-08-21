@@ -5,23 +5,32 @@ import sys
 from pathlib import Path
 
 from . import bridge
+from .config import AppConfig, ConfigPaths, load_config
 from .db import LocalStore
 
 
-def _resolve_db_path() -> Path:
+def _resolve_paths() -> ConfigPaths:
     home = os.environ.get("JAMETLY_HOME")
     if home:
-        root = Path(home) / ".config" / "jametly"
-    else:
-        root = Path.home() / ".config" / "jametly"
-    root.mkdir(parents=True, exist_ok=True)
-    return root / "jametly.sqlite"
+        return ConfigPaths.from_home(Path(home))
+    return ConfigPaths.from_home(Path.home())
 
 
 def main() -> None:
-    store = LocalStore(_resolve_db_path())
+    paths = _resolve_paths()
+    store = LocalStore(paths.config_file.with_name("jametly.sqlite"))
     try:
-        bridge.run(sys.stdin, sys.stdout, store=store)
+        config = load_config(paths.config_file)
+    except FileNotFoundError:
+        config = AppConfig()
+    try:
+        bridge.run(
+            sys.stdin,
+            sys.stdout,
+            store=store,
+            config=config,
+            config_path=paths.config_file,
+        )
     finally:
         store.close()
 
