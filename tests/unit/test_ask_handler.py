@@ -446,7 +446,7 @@ async def test_handle_ask_cancel_rejects_missing_thread_id(tmp_path: Path) -> No
 
 
 class _StubRegistry:
-    def cancel_thread(self, thread_id: str) -> int:
+    def cancel_thread(self, thread_id: str, *, exclude_request_id: str | None = None) -> int:
         return 0
 
 
