@@ -5,6 +5,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
+import httpx
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessageChunk, BaseMessage, HumanMessage, SystemMessage
 
@@ -72,6 +73,11 @@ def _classify_provider_error(exc: BaseException) -> tuple[ErrorCode, str]:
         return ErrorCode.PROVIDER_UNAVAILABLE, str(exc)
     if isinstance(exc, ProviderMalformedResponseError):
         return ErrorCode.PARSE_ERROR, str(exc)
+    if isinstance(
+        exc,
+        (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError, ConnectionRefusedError),
+    ):
+        return ErrorCode.PROVIDER_UNAVAILABLE, f"{type(exc).__name__}: {exc}"
     return ErrorCode.INTERNAL, f"{type(exc).__name__}: {exc}"
 
 
@@ -246,7 +252,7 @@ async def handle_chat_cancel(request: Request, emit: Emit, *, task_registry) -> 
     thread_id = request.params.get("thread_id")
     if not isinstance(thread_id, str) or not thread_id:
         return _err_reply(request.id, ErrorCode.INVALID_REQUEST, "thread_id is required")
-    cancelled = task_registry.cancel_thread(thread_id)
+    cancelled = task_registry.cancel_thread(thread_id, exclude_request_id=request.id)
     return Reply(id=request.id, result={"thread_id": thread_id, "cancelled": cancelled})
 
 

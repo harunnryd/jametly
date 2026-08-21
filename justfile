@@ -198,6 +198,14 @@ verify-jam-0010:
     uv run pytest tests/unit/test_chat_handler.py -q --no-header
     uv run pytest tests/integration/test_chat_stream.py -q --no-header
 
+# Ask graph with bounded transcript context, citations, observable tool calls, per-meeting checkpoints, and cancel.
+verify-jam-0011:
+    uv run pytest tests/unit/test_ask_context.py -q --no-header
+    uv run pytest tests/unit/test_ask_tools.py -q --no-header
+    uv run pytest tests/unit/test_ask_checkpoint.py -q --no-header
+    uv run pytest tests/unit/test_ask_handler.py -q --no-header
+    uv run pytest tests/integration/test_ask_stream.py -q --no-header
+
 # ---- coverage -------------------------------------------------------------
 
 cov-rust:

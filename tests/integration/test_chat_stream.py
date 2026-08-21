@@ -94,6 +94,7 @@ def test_providers_list_filters_by_kind(sidecar: subprocess.Popen) -> None:
     assert {provider["id"] for provider in reply["result"]["providers"]} == {"faster-whisper"}
 
 
+@pytest.mark.network
 def test_chat_stream_emits_token_state_done_with_correlation_id(
     sidecar: subprocess.Popen,
 ) -> None:

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import httpx
 from langchain_core.language_models import BaseChatModel
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
@@ -397,3 +398,100 @@ async def test_stream_event_helper_produces_a_carrying_event() -> None:
         "thread_id": "th-1",
         "data": "hello",
     }
+
+
+class _RaisingChatModel(BaseChatModel):
+    _error: BaseException
+
+    def __init__(self, error: BaseException) -> None:
+        super().__init__()
+        self._error = error
+
+    @property
+    def _llm_type(self) -> str:
+        return "raising"
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        raise self._error
+
+    async def _astream(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[ChatGenerationChunk]:
+        raise self._error
+        yield ChatGenerationChunk(message=AIMessageChunk(content=""), text="")
+
+
+def _raising_factory(error: BaseException) -> Callable[..., BaseChatModel]:
+    def factory(provider_id: str, *, model_name: str) -> BaseChatModel:
+        return _RaisingChatModel(error=error)
+
+    return factory
+
+
+async def test_chat_stream_maps_httpx_connect_error_to_provider_unavailable() -> None:
+    request = Request(
+        id="ce1",
+        method="chat.stream",
+        params={"messages": [{"role": "user", "content": "hi"}]},
+    )
+    emit = EventRecorder()
+    error = httpx.ConnectError("connection refused", request=httpx.Request("POST", "http://x"))
+
+    reply = await handle_chat_stream(
+        request,
+        emit,
+        config=AppConfig(),
+        model_factory=_raising_factory(error),
+    )
+
+    assert reply.error is not None
+    assert reply.error.code == ErrorCode.PROVIDER_UNAVAILABLE
+    error_events = emit.of_kind("chat.error")
+    assert len(error_events) == 1
+    assert error_events[0].params["code"] == "PROVIDER_UNAVAILABLE"
+
+
+async def test_chat_stream_maps_httpx_timeout_to_provider_unavailable() -> None:
+    request = Request(
+        id="ce2",
+        method="chat.stream",
+        params={"messages": [{"role": "user", "content": "hi"}]},
+    )
+    emit = EventRecorder()
+
+    reply = await handle_chat_stream(
+        request,
+        emit,
+        config=AppConfig(),
+        model_factory=_raising_factory(httpx.TimeoutException("read timed out")),
+    )
+
+    assert reply.error is not None
+    assert reply.error.code == ErrorCode.PROVIDER_UNAVAILABLE
+
+
+async def test_chat_stream_maps_connection_refused_to_provider_unavailable() -> None:
+    request = Request(
+        id="ce3",
+        method="chat.stream",
+        params={"messages": [{"role": "user", "content": "hi"}]},
+    )
+    emit = EventRecorder()
+
+    reply = await handle_chat_stream(
+        request,
+        emit,
+        config=AppConfig(),
+        model_factory=_raising_factory(ConnectionRefusedError("nope")),
+    )
+
+    assert reply.error is not None
+    assert reply.error.code == ErrorCode.PROVIDER_UNAVAILABLE

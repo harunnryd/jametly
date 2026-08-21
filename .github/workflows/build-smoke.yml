@@ -47,6 +47,12 @@ jobs:
       - name: Install Rust coverage tool
         uses: taiki-e/install-action@cargo-llvm-cov
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@cargo-nextest
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
       - name: Install deps
         run: |
           uv sync --all-extras --frozen
