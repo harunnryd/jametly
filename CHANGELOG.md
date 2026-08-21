@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/architecture/{00-overview,01-ipc,02-modules}`: single ASCII diagram + full IPC method list + module map
 
 ### Changed
+- **JAM-0010 langchain wrap**: `ai/src/jamly/llm/base.py` now wraps LangChain `init_chat_model` (`BaseChatModel`); `ProviderRegistry.build` + module-level `build_chat_model` both validate the provider/model against the registry before delegating to `init_chat_model`. `ai/src/jamly/agent/chat.py` calls `model.astream(messages)` via `asyncio.wait_for` and translates LangChain `AIMessageChunk` → our `chat.token` events; `ProviderError` subclasses + `_classify_provider_error` mapping unchanged. `ai/src/jamly/llm/fake.py` removed (tests use a tiny `BaseChatModel` subclass yielding `ChatGenerationChunk`s, mirroring the LangChain streaming contract). No IPC schema change, no public wire-format change, no new runtime dep beyond the LangChain stack added in `deps(ai)`. ADR 0002 stays `accepted` — this is the implementation the ADR already locked in.
 - README.md: "no cloud calls" wording reconciled with SECURITY.md "model downloads OK" (model downloads are user-key configured, link to SECURITY §Privacy posture).
 - `docs/decisions/0006-macos-stealth-honest-disclosure.md` + SECURITY.md: stealth tiers renamed from "Tier 0/1/2" → "Band A/B/C" to eliminate word collision with the verify ladder (`verify`/`verify-ci`/`verify-strict`/`verify-full`).
 - `tauri.conf.json`: `minimumSystemVersion` 10.15 → 13.0 to match the bug-report envelope.

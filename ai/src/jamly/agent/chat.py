@@ -5,12 +5,12 @@ import uuid
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
-from pydantic import ValidationError
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessageChunk, BaseMessage, HumanMessage, SystemMessage
 
 from ..config import AppConfig, load_config, save_config
 from ..llm import (
     ChatMessage,
-    ChatModel,
     ProviderKind,
     ProviderRegistry,
     build_chat_model,
@@ -93,6 +93,16 @@ def _normalize_messages(raw: object) -> list[ChatMessage]:
     return messages
 
 
+def _to_langchain(messages: list[ChatMessage]) -> list[BaseMessage]:
+    out: list[BaseMessage] = []
+    for msg in messages:
+        if msg.role == "system":
+            out.append(SystemMessage(content=msg.content))
+        else:
+            out.append(HumanMessage(content=msg.content))
+    return out
+
+
 def _resolve_deadline(raw: object) -> float:
     if raw is None:
         return DEFAULT_DEADLINE_S
@@ -120,12 +130,27 @@ def _resolve_kind(raw: object) -> ProviderKind:
     raise ValueError("kind must be 'ai' or 'stt'")
 
 
+def _chunk_content(chunk: AIMessageChunk) -> str:
+    content = chunk.content
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, dict) and "text" in item:
+                parts.append(str(item["text"]))
+            elif isinstance(item, str):
+                parts.append(item)
+        return "".join(parts)
+    return ""
+
+
 async def handle_chat_stream(
     request: Request,
     emit: Emit,
     *,
     config: AppConfig,
-    model_factory: Callable[..., ChatModel] = build_chat_model,
+    model_factory: Callable[..., BaseChatModel] = build_chat_model,
 ) -> Reply:
     try:
         messages = _normalize_messages(request.params.get("messages"))
@@ -153,11 +178,15 @@ async def handle_chat_stream(
     await emit(stream_event(request.id, CHAT_STATE, thread_id=thread_id, state="started"))
 
     tokens: list[str] = []
+    lc_messages = _to_langchain(messages)
 
     async def emit_tokens() -> None:
-        async for token in model.stream(messages):
-            tokens.append(token)
-            await emit(stream_event(request.id, CHAT_TOKEN, thread_id=thread_id, data=token))
+        async for chunk in model.astream(lc_messages):
+            text = _chunk_content(chunk)
+            if not text:
+                continue
+            tokens.append(text)
+            await emit(stream_event(request.id, CHAT_TOKEN, thread_id=thread_id, data=text))
 
     try:
         await asyncio.wait_for(emit_tokens(), timeout=deadline_s)

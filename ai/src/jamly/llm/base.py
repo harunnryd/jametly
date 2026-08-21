@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import abc
-from collections.abc import AsyncIterator, Sequence
 from enum import StrEnum
-from typing import Protocol, runtime_checkable
 
+from langchain.chat_models import init_chat_model
+from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -29,58 +28,23 @@ class ChatMessage(BaseModel):
     content: str = Field(min_length=0)
 
 
-@runtime_checkable
-class ChatModel(Protocol):
-    provider_id: str
-    model_name: str
-
-    def stream(self, messages: Sequence[ChatMessage]) -> AsyncIterator[str]: ...
-
-    def invoke(self, messages: Sequence[ChatMessage]) -> str: ...
-
-
-class ChatModelABC(abc.ABC):
-    provider_id: str
-    model_name: str
-
-    @abc.abstractmethod
-    def stream(self, messages: Sequence[ChatMessage]) -> AsyncIterator[str]: ...
-
-    @abc.abstractmethod
-    def invoke(self, messages: Sequence[ChatMessage]) -> str: ...
-
-
-class _OllamaChatModel(ChatModelABC):
-    def __init__(self, model_name: str) -> None:
-        self.provider_id = "ollama"
-        self.model_name = model_name
-
-    async def stream(self, messages: Sequence[ChatMessage]) -> AsyncIterator[str]:
-        joined = " ".join(message.content for message in messages)
-        for token in joined.split():
-            yield token
-
-    def invoke(self, messages: Sequence[ChatMessage]) -> str:
-        return " ".join(message.content for message in messages)
-
-    def __repr__(self) -> str:
-        return f"OllamaChatModel(provider={self.provider_id!r}, model={self.model_name!r})"
+ChatModel = BaseChatModel
 
 
 class ProviderRegistry:
-    _BUILTIN_AI: dict[str, tuple[str, type[ChatModelABC]]] = {
-        "ollama": ("qwen2.5:7b-instruct", _OllamaChatModel),
+    _BUILTIN_AI: dict[str, str] = {
+        "ollama": "qwen2.5:7b-instruct",
     }
 
-    _BUILTIN_STT: dict[str, tuple[str, type[ChatModelABC]]] = {
-        "faster-whisper": ("small", _OllamaChatModel),
+    _BUILTIN_STT: dict[str, str] = {
+        "faster-whisper": "small",
     }
 
     def __init__(
         self,
         *,
-        providers: dict[str, tuple[str, type[ChatModelABC]]] | None = None,
-        stt: dict[str, tuple[str, type[ChatModelABC]]] | None = None,
+        providers: dict[str, str] | None = None,
+        stt: dict[str, str] | None = None,
     ) -> None:
         self._ai = dict(self._BUILTIN_AI)
         self._stt = dict(self._BUILTIN_STT)
@@ -91,35 +55,35 @@ class ProviderRegistry:
 
     def list(self, kind: str | ProviderKind | None = None) -> list[ProviderInfo]:
         if kind is None:
-            ai = [self._info(pid, ProviderKind.AI) for pid in self._ai]
-            stt = [self._info(pid, ProviderKind.STT) for pid in self._stt]
-            return ai + stt
+            return self._list_kind(ProviderKind.AI) + self._list_kind(ProviderKind.STT)
         try:
             resolved = ProviderKind(kind)
         except ValueError:
             return []
-        if resolved is ProviderKind.AI:
-            return [self._info(pid, ProviderKind.AI) for pid in self._ai]
-        return [self._info(pid, ProviderKind.STT) for pid in self._stt]
+        return self._list_kind(resolved)
 
-    def _info(self, provider_id: str, kind: ProviderKind) -> ProviderInfo:
-        default_model, _ = (self._ai if kind is ProviderKind.AI else self._stt)[provider_id]
-        return ProviderInfo(
-            id=provider_id,
-            kind=kind,
-            default_model=default_model,
-        )
+    def _list_kind(self, kind: ProviderKind) -> list[ProviderInfo]:
+        table = self._ai if kind is ProviderKind.AI else self._stt
+        return [
+            ProviderInfo(
+                id=provider_id,
+                kind=kind,
+                default_model=default_model,
+            )
+            for provider_id, default_model in table.items()
+        ]
 
-    def build(self, provider_id: str, *, model_name: str = "") -> ChatModel:
-        for table in (self._ai, self._stt):
-            entry = table.get(provider_id)
-            if entry is not None:
-                if not model_name.strip():
-                    raise ValueError("model name must be a non-empty string")
-                default, factory = entry
-                return factory(model_name or default)
+    def build(self, provider_id: str, *, model_name: str = "") -> BaseChatModel:
+        if provider_id not in self._ai:
+            raise ValueError(f"unknown provider: {provider_id!r}")
+        if not model_name.strip():
+            raise ValueError("model name must be a non-empty string")
+        return build_chat_model(provider_id, model_name=model_name)
+
+
+def build_chat_model(provider_id: str, *, model_name: str) -> BaseChatModel:
+    if provider_id not in ProviderRegistry()._ai:
         raise ValueError(f"unknown provider: {provider_id!r}")
-
-
-def build_chat_model(provider_id: str, *, model_name: str) -> ChatModel:
-    return ProviderRegistry().build(provider_id, model_name=model_name)
+    if not model_name.strip():
+        raise ValueError("model name must be a non-empty string")
+    return init_chat_model(model=model_name, model_provider=provider_id)

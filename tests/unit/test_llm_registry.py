@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+from typing import Any
+
 import pytest
+from langchain.chat_models import init_chat_model
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage
 
 from jamly.llm import (
-    ChatModel,
     ProviderInfo,
     ProviderKind,
     ProviderRegistry,
@@ -44,14 +49,35 @@ def test_registry_unknown_kind_returns_an_empty_list() -> None:
     assert registry.list(kind="unknown") == []
 
 
-def test_build_chat_model_returns_a_chat_model_instance() -> None:
+def test_build_chat_model_returns_langchain_base_chat_model() -> None:
     registry = ProviderRegistry()
 
     model = registry.build("ollama", model_name="qwen2.5:7b-instruct")
 
-    assert isinstance(model, ChatModel)
-    assert model.provider_id == "ollama"
-    assert model.model_name == "qwen2.5:7b-instruct"
+    assert isinstance(model, BaseChatModel)
+
+
+def test_build_chat_model_delegates_to_init_chat_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_init(
+        model: str | None = None,
+        *,
+        model_provider: str | None = None,
+        **kwargs: Any,
+    ) -> BaseChatModel:
+        captured["model"] = model
+        captured["model_provider"] = model_provider
+        captured.update(kwargs)
+        return init_chat_model("ollama:gpt-oss:20b", model_provider="ollama")
+
+    monkeypatch.setattr("jamly.llm.base.init_chat_model", fake_init)
+
+    model = build_chat_model("ollama", model_name="qwen2.5:7b-instruct")
+
+    assert isinstance(model, BaseChatModel)
+    assert captured.get("model_provider") == "ollama"
+    assert captured.get("model") == "qwen2.5:7b-instruct"
 
 
 def test_build_chat_model_rejects_unknown_provider() -> None:
@@ -72,13 +98,29 @@ def test_module_level_factory_delegates_to_a_fresh_registry() -> None:
     model_a = build_chat_model("ollama", model_name="qwen2.5:7b-instruct")
     model_b = build_chat_model("ollama", model_name="qwen2.5:7b-instruct")
 
-    assert isinstance(model_a, ChatModel)
-    assert isinstance(model_b, ChatModel)
+    assert isinstance(model_a, BaseChatModel)
+    assert isinstance(model_b, BaseChatModel)
     assert model_a is not model_b
 
 
-def test_chat_model_repr_surfaces_provider_and_model() -> None:
-    model = build_chat_model("ollama", model_name="qwen2.5:7b-instruct")
+def test_build_chat_model_result_streams_via_langchain_astream() -> None:
+    from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
-    assert "ollama" in repr(model)
-    assert "qwen2.5:7b-instruct" in repr(model)
+    model = FakeMessagesListChatModel(responses=[AIMessage(content="hello world")])
+
+    async def collect() -> list[str]:
+        out: list[str] = []
+        async for chunk in model.astream([]):
+            content = getattr(chunk, "content", "")
+            if isinstance(content, str):
+                out.append(content)
+            elif isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict) and "text" in item:
+                        out.append(item["text"])
+        return out
+
+    import asyncio
+
+    chunks = asyncio.run(collect())
+    assert "".join(chunks) == "hello world"
