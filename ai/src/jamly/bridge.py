@@ -6,6 +6,7 @@ from typing import Awaitable, Callable, TextIO
 
 from pydantic import ValidationError
 
+from .audio import handle_transcribe_audio
 from .protocol import ErrorBody, ErrorCode, Event, Reply, Request
 
 STREAM_EVENT = "stream.event"
@@ -122,6 +123,7 @@ DEFAULT_HANDLERS: dict[str, Handler] = {
     "echo": handle_echo,
     "debug.stream": handle_debug_stream,
     "debug.sleep": handle_debug_sleep,
+    "transcribe.audio": handle_transcribe_audio,
 }
 
 

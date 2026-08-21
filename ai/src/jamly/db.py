@@ -16,7 +16,7 @@ class StoreError(Exception):
     """A safe, user-facing local-store error without SQL or secret values."""
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class LocalStore:
@@ -100,6 +100,15 @@ class LocalStore:
                 """
             )
             self.connection.commit()
+        if self.schema_version() < 2:
+            self.connection.executescript(
+                """
+                ALTER TABLE utterances ADD COLUMN segment_id TEXT NOT NULL DEFAULT '';
+                CREATE INDEX utterances_segment_id_idx ON utterances(segment_id);
+                PRAGMA user_version = 2;
+                """
+            )
+            self.connection.commit()
 
     @contextlib.contextmanager
     def transaction(self) -> Iterator[None]:
@@ -141,15 +150,24 @@ class LocalStore:
             raise StoreError("meeting not found")
 
     def append_utterance(
-        self, meeting_id: str, speaker: str, text: str, start_ms: int, end_ms: int, confidence: float
+        self,
+        meeting_id: str,
+        speaker: str,
+        text: str,
+        start_ms: int,
+        end_ms: int,
+        confidence: float,
+        segment_id: str = "",
     ) -> str:
         self._require_meeting(meeting_id)
         if start_ms < 0 or end_ms < start_ms or not 0 <= confidence <= 1:
             raise StoreError("invalid utterance")
+        if not segment_id:
+            raise StoreError("segment_id is required")
         identifier = str(uuid.uuid4())
         self.connection.execute(
-            "INSERT INTO utterances(id, meeting_id, speaker, text, start_ms, end_ms, confidence) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (identifier, meeting_id, speaker, text, start_ms, end_ms, confidence),
+            "INSERT INTO utterances(id, meeting_id, speaker, text, start_ms, end_ms, confidence, segment_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (identifier, meeting_id, speaker, text, start_ms, end_ms, confidence, segment_id),
         )
         self._commit_if_outer_transaction()
         return identifier
@@ -200,7 +218,7 @@ class LocalStore:
         limit = max(1, min(limit, 100))
         rows = self.connection.execute(
             """
-            SELECT u.id, u.meeting_id, u.speaker, u.text, u.start_ms, u.end_ms, u.confidence
+            SELECT u.id, u.meeting_id, u.speaker, u.text, u.start_ms, u.end_ms, u.confidence, u.segment_id
             FROM utterances_fts f
             JOIN utterances u ON u.rowid = f.rowid
             WHERE utterances_fts MATCH ?
