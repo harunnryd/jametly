@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import sqlite3
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
+
+from pydantic import BaseModel
 
 from .config import ConfigPaths
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class StoreError(Exception):
@@ -45,13 +50,13 @@ class LocalStore:
         if self.schema_version() == 0:
             self.connection.executescript(
                 """
-                CREATE TABLE meetings (
+                CREATE TABLE IF NOT EXISTS meetings (
                     id TEXT PRIMARY KEY,
                     title TEXT NOT NULL DEFAULT '',
                     started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     ended_at TEXT
                 );
-                CREATE TABLE utterances (
+                CREATE TABLE IF NOT EXISTS utterances (
                     id TEXT PRIMARY KEY,
                     meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
                     speaker TEXT NOT NULL,
@@ -60,38 +65,38 @@ class LocalStore:
                     end_ms INTEGER NOT NULL,
                     confidence REAL NOT NULL
                 );
-                CREATE VIRTUAL TABLE utterances_fts USING fts5(
+                CREATE VIRTUAL TABLE IF NOT EXISTS utterances_fts USING fts5(
                     text,
                     content='utterances',
                     content_rowid='rowid'
                 );
-                CREATE TRIGGER utterances_ai AFTER INSERT ON utterances BEGIN
+                CREATE TRIGGER IF NOT EXISTS utterances_ai AFTER INSERT ON utterances BEGIN
                     INSERT INTO utterances_fts(rowid, text) VALUES (new.rowid, new.text);
                 END;
-                CREATE TRIGGER utterances_ad AFTER DELETE ON utterances BEGIN
+                CREATE TRIGGER IF NOT EXISTS utterances_ad AFTER DELETE ON utterances BEGIN
                     INSERT INTO utterances_fts(utterances_fts, rowid, text)
                     VALUES ('delete', old.rowid, old.text);
                 END;
-                CREATE TRIGGER utterances_au AFTER UPDATE OF text ON utterances BEGIN
+                CREATE TRIGGER IF NOT EXISTS utterances_au AFTER UPDATE OF text ON utterances BEGIN
                     INSERT INTO utterances_fts(utterances_fts, rowid, text)
                     VALUES ('delete', old.rowid, old.text);
                     INSERT INTO utterances_fts(rowid, text) VALUES (new.rowid, new.text);
                 END;
-                CREATE TABLE messages (
+                CREATE TABLE IF NOT EXISTS messages (
                     id TEXT PRIMARY KEY,
                     meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
-                CREATE TABLE action_items (
+                CREATE TABLE IF NOT EXISTS action_items (
                     id TEXT PRIMARY KEY,
                     meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
                     body TEXT NOT NULL,
                     owner TEXT,
                     completed INTEGER NOT NULL DEFAULT 0
                 );
-                CREATE TABLE checkpoints (
+                CREATE TABLE IF NOT EXISTS checkpoints (
                     thread_id TEXT PRIMARY KEY,
                     payload TEXT NOT NULL,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -104,7 +109,7 @@ class LocalStore:
             self.connection.executescript(
                 """
                 ALTER TABLE utterances ADD COLUMN segment_id TEXT NOT NULL DEFAULT '';
-                CREATE INDEX utterances_segment_id_idx ON utterances(segment_id);
+                CREATE INDEX IF NOT EXISTS utterances_segment_id_idx ON utterances(segment_id);
                 PRAGMA user_version = 2;
                 """
             )
@@ -226,5 +231,89 @@ class LocalStore:
             LIMIT ?
             """,
             (query, limit),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def end_meeting(self, meeting_id: str) -> bool:
+        cursor = self.connection.execute(
+            "UPDATE meetings SET ended_at = CURRENT_TIMESTAMP "
+            "WHERE id = ? AND ended_at IS NULL",
+            (meeting_id,),
+        )
+        self._commit_if_outer_transaction()
+        if cursor.rowcount == 0:
+            self._require_meeting(meeting_id)
+        return cursor.rowcount == 1
+
+    def get_active_meeting(self) -> dict[str, Any] | None:
+        row = self.connection.execute(
+            "SELECT * FROM meetings WHERE ended_at IS NULL ORDER BY started_at LIMIT 1"
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def get_full_meeting(self, meeting_id: str) -> dict[str, Any]:
+        self._require_meeting(meeting_id)
+        meeting = self.get_meeting(meeting_id)
+        rows = self.connection.execute(
+            "SELECT id, speaker, text, start_ms, end_ms, confidence, segment_id "
+            "FROM utterances WHERE meeting_id = ? ORDER BY start_ms, id",
+            (meeting_id,),
+        ).fetchall()
+        return {"meeting": meeting, "utterances": [dict(row) for row in rows]}
+
+    def list_meetings(
+        self, *, limit: int = 20, search: str | None = None
+    ) -> dict[str, Any]:
+        limit = max(1, min(limit, 100))
+        query = search.strip() if isinstance(search, str) else ""
+        if query:
+            if '"' in query or "\x00" in query:
+                raise StoreError("invalid search query")
+            rows = self.connection.execute(
+                """
+                SELECT DISTINCT m.id, m.title, m.started_at, m.ended_at
+                FROM meetings m
+                JOIN utterances u ON u.meeting_id = m.id
+                JOIN utterances_fts f ON f.rowid = u.rowid
+                WHERE utterances_fts MATCH ?
+                ORDER BY m.started_at DESC
+                LIMIT ?
+                """,
+                (query, limit),
+            ).fetchall()
+            return {"meetings": [dict(row) for row in rows], "limit": limit}
+        if search is not None:
+            return {"meetings": [], "limit": limit}
+        rows = self.connection.execute(
+            "SELECT id, title, started_at, ended_at FROM meetings "
+            "ORDER BY started_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return {"meetings": [dict(row) for row in rows], "limit": limit}
+
+    def save_checkpoint(self, meeting_id: str, payload: BaseModel) -> None:
+        self._require_meeting(meeting_id)
+        body = payload.model_dump_json()
+        self.connection.execute(
+            "INSERT INTO checkpoints(thread_id, payload) VALUES (?, ?) "
+            "ON CONFLICT(thread_id) DO UPDATE SET "
+            "  payload = excluded.payload, "
+            "  updated_at = CURRENT_TIMESTAMP",
+            (meeting_id, body),
+        )
+        self._commit_if_outer_transaction()
+
+    def load_checkpoint(self, meeting_id: str, model: type[T]) -> T:
+        row = self.connection.execute(
+            "SELECT payload FROM checkpoints WHERE thread_id = ?", (meeting_id,)
+        ).fetchone()
+        if row is None:
+            raise StoreError("checkpoint not found")
+        return model.model_validate_json(row["payload"])
+
+    def find_orphans(self) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            "SELECT id, title, started_at FROM meetings WHERE ended_at IS NULL "
+            "ORDER BY started_at"
         ).fetchall()
         return [dict(row) for row in rows]

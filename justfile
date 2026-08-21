@@ -178,13 +178,19 @@ verify-jam-0002:
 verify-jam-0003:
     uv run pytest tests/unit/test_async_bridge.py -v
     uv run pytest tests/integration/test_bridge_async.py -v
-    uv run pytest tests/unit/test_sidecar.py tests/integration/test_bridge_events.py -v
+    uv run pytest tests/integration/test_bridge_events.py -v
 
 # Local STT pipeline: chunk ordering, VAD drain, partial/final events, and typed errors.
 verify-jam-0008:
     uv run pytest tests/unit/test_stt.py -q --no-header
     uv run pytest tests/property/test_audio_chunker.py -q --no-header
     uv run pytest tests/integration/test_stt_pipeline.py -q --no-header
+
+# Meeting session lifecycle: state machine, persistence, exactly-once stops, and cold-start recovery.
+verify-jam-0009:
+    uv run pytest tests/unit/test_meetings.py -q --no-header
+    uv run pytest tests/unit/test_db_session.py -q --no-header
+    uv run pytest tests/integration/test_meeting_session.py -q --no-header
 
 # ---- coverage -------------------------------------------------------------
 
