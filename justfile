@@ -157,6 +157,12 @@ verify-jam-0005:
     cargo test -p screen-capture -- --nocapture
     cargo clippy -p screen-capture --all-targets -- -D warnings
 
+# Secure configuration contract: namespace validation, fake store, and config model.
+verify-jam-0006:
+    cargo test -p secure-store -- --nocapture
+    cargo clippy -p secure-store --all-targets -- -D warnings
+    uv run pytest tests/unit/test_config.py -q --no-header
+
 # Phase 0: full-duplex IPC — events and replies share one stdout stream.
 verify-jam-0002:
     cargo test -p ipc-proto

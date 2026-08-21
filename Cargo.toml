@@ -5,6 +5,7 @@ members = [
     "core/ipc-proto",
     "core/audio-backend",
     "core/screen-capture",
+    "core/secure-store",
     # core/sqlite-store (Phase 1+)
     # core/secure-store (Phase 1+)
     # core/stealth-macos (Phase 5+; opt-in)

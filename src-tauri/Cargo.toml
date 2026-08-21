@@ -30,6 +30,7 @@ tokio = { workspace = true }
 ipc-proto = { path = "../core/ipc-proto" }
 audio-backend = { path = "../core/audio-backend" }
 screen-capture = { path = "../core/screen-capture" }
+secure-store = { path = "../core/secure-store" }
 
 [features]
 default = ["custom-protocol"]
