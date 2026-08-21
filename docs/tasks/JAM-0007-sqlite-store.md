@@ -1,7 +1,7 @@
 ---
 id: JAM-0007
 title: SQLite meeting and transcript store
-status: in_progress
+status: closed
 type: feat
 priority: P0
 labels: [database, meetings, search]

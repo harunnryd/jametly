@@ -8,6 +8,9 @@ requires-python = ">=3.12"
 
 dependencies = [
   "pydantic>=2.7",
+  "numpy>=1.26",
+  "faster-whisper>=1.2,<2",
+  "silero-vad>=6.2,<7",
 ]
 
 [project.scripts]
