@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
+
+from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 from ..db import LocalStore
 
@@ -28,10 +32,36 @@ class ToolSpec:
     mutates: bool = False
 
 
+class SearchHistoryInput(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    query: str = Field(default="", min_length=0)
+    limit: int = Field(default=5, ge=1, le=100)
+
+
+_search_history_store: LocalStore | None = None
+
+
+def _resolve_store(store: LocalStore | None) -> LocalStore | None:
+    if store is not None:
+        return store
+    return _search_history_store
+
+
+@tool("search_history", args_schema=SearchHistoryInput)
+def search_history(query: str, limit: int = 5, *, store: LocalStore | None = None) -> dict:
+    """Search saved meeting transcripts via FTS5 ranking (read-only)."""
+    rows: list[dict] = []
+    resolved = _resolve_store(store)
+    if resolved is not None and query:
+        rows = resolved.search(query, limit=limit)
+    return {"results": rows}
+
+
 TOOL_REGISTRY: dict[str, ToolSpec] = {
     "search_history": ToolSpec(
         name="search_history",
-        description="Search saved meeting transcripts via FTS5 ranking.",
+        description=search_history.description,
         mutates=False,
     ),
 }

@@ -14,7 +14,7 @@ from .ask import (
     handle_ask_stream,
 )
 from .checkpoint import load_ask_state, save_ask_state
-from .state import AskState, Citation
+from .state import AskGraphState, AskState, Citation
 from .tools import (
     TOOL_REGISTRY,
     ToolError,
@@ -22,6 +22,7 @@ from .tools import (
     ToolSpec,
     UnknownToolError,
     invoke_tool,
+    search_history,
 )
 
 __all__ = [
@@ -32,6 +33,7 @@ __all__ = [
     "ASK_TOKEN",
     "ASK_TOOL_CALL",
     "ASK_TOOL_RESULT",
+    "AskGraphState",
     "AskState",
     "Citation",
     "TOOL_REGISTRY",
@@ -46,4 +48,5 @@ __all__ = [
     "invoke_tool",
     "load_ask_state",
     "save_ask_state",
+    "search_history",
 ]
