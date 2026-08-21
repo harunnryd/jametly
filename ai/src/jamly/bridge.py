@@ -91,8 +91,13 @@ class TaskRegistry:
         task.cancel()
         return True
 
-    def cancel_thread(self, thread_id: str) -> int:
-        return sum(self.cancel(request_id) for request_id in tuple(self._threads.get(thread_id, ())))
+    def cancel_thread(self, thread_id: str, *, exclude_request_id: str | None = None) -> int:
+        siblings = (
+            request_id
+            for request_id in tuple(self._threads.get(thread_id, ()))
+            if request_id != exclude_request_id
+        )
+        return sum(self.cancel(request_id) for request_id in siblings)
 
     def cancel_all(self) -> int:
         return sum(self.cancel(request_id) for request_id in tuple(self._tasks))

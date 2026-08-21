@@ -246,7 +246,7 @@ async def handle_chat_cancel(request: Request, emit: Emit, *, task_registry) -> 
     thread_id = request.params.get("thread_id")
     if not isinstance(thread_id, str) or not thread_id:
         return _err_reply(request.id, ErrorCode.INVALID_REQUEST, "thread_id is required")
-    cancelled = task_registry.cancel_thread(thread_id)
+    cancelled = task_registry.cancel_thread(thread_id, exclude_request_id=request.id)
     return Reply(id=request.id, result={"thread_id": thread_id, "cancelled": cancelled})
 
 

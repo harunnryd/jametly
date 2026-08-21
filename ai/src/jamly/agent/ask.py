@@ -257,6 +257,18 @@ async def handle_ask_stream(
 ) -> Reply:
     params = request.params if isinstance(request.params, dict) else {}
 
+    tool = params.get("tool")
+    if isinstance(tool, str) and tool:
+        tool_args = params.get("tool_args") if isinstance(params.get("tool_args"), dict) else {}
+        return await _run_tool_path(
+            request,
+            emit,
+            store=store,
+            thread_id=_resolve_thread_id(params.get("thread_id")),
+            tool=tool,
+            tool_args=tool_args,
+        )
+
     try:
         question = _resolve_question(params.get("question"))
     except ValueError as exc:
@@ -272,18 +284,6 @@ async def handle_ask_stream(
         deadline_s = _resolve_deadline(params.get("deadline_s"))
     except ValueError as exc:
         return _err_reply(request.id, ErrorCode.INVALID_REQUEST, str(exc))
-
-    tool = params.get("tool")
-    if isinstance(tool, str) and tool:
-        tool_args = params.get("tool_args") if isinstance(params.get("tool_args"), dict) else {}
-        return await _run_tool_path(
-            request,
-            emit,
-            store=store,
-            thread_id=thread_id,
-            tool=tool,
-            tool_args=tool_args,
-        )
 
     state = load_ask_state(store, meeting_id, thread_id)
     if state is None:
@@ -406,7 +406,7 @@ async def handle_ask_cancel(
             ErrorCode.INTERNAL,
             "ask cancel requires a task registry",
         )
-    cancelled = task_registry.cancel_thread(thread_id)
+    cancelled = task_registry.cancel_thread(thread_id, exclude_request_id=request.id)
     return Reply(
         id=request.id,
         result={"thread_id": thread_id, "cancelled": cancelled},
