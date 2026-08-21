@@ -34,6 +34,7 @@ docs/tasks/                                     @jametly/tooling-owner
 CONTRIBUTING.md                                 @jametly/tooling-owner
 AGENTS.md                                       @jametly/tooling-owner
 SECURITY.md                                     @jametly/tooling-owner
+SECURITY.md                                     @jametly/security-owner
 STYLE.md                                        @jametly/tooling-owner
 TRADEMARKS.md                                   @jametly/tooling-owner
 GOAL.md                                         @jametly/tooling-owner
@@ -46,3 +47,5 @@ pnpm-workspace.yaml                             @jametly/tooling-owner
 # CI
 .github/                                        @jametly/tooling-owner
 .pre-commit-config.yaml                         @jametly/tooling-owner
+.github/workflows/release.yml                   @jametly/release-owner
+src-tauri/tauri.conf.json                       @jametly/release-owner

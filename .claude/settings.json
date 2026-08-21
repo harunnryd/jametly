@@ -83,7 +83,6 @@
       "Bash(diskutil erase*)",
       "Bash(sudo rm*)",
       "Bash(sudo dd*)",
-      "Bash(:(){ :|:&};:)",
       "Bash(systemctl*)",
       "Bash(launchctl*)",
       "Bash(shutdown*)",

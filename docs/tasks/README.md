@@ -25,6 +25,10 @@ The `.claude/commands/task.md` slash command automates this flow.
 
 Same flow. The task file's Definition of Done + the risk checklist in the PR template cover the reviewable surface; your reviewer checks against the AC list.
 
+## Definition of Done inheritance
+
+The Definition of Done in [`TEMPLATE.md`](./TEMPLATE.md) is normative for every task. A task file may list additional task-specific completion checks in its own `## Definition of Done` section; those checks supplement and never replace the template requirements for red-first tests, verification, coverage, changelog, PR review, CODEOWNERS, and closing the task after merge.
+
 ## Picking up an unowned gap
 
 If you have a meaningful unit of work that's not in this directory yet, **start the task file** with:
