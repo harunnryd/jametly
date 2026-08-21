@@ -172,6 +172,23 @@ def chat_handlers(
     }
 
 
+def ask_handlers(
+    store: LocalStore,
+    config: AppConfig,
+    task_registry: TaskRegistry,
+) -> dict[str, Handler]:
+    from .agent.ask import handle_ask_cancel, handle_ask_stream
+
+    return {
+        "ask.stream": lambda req, emit: handle_ask_stream(
+            req, emit, store=store, config=config
+        ),
+        "ask.cancel": lambda req, emit: handle_ask_cancel(
+            req, emit, task_registry=task_registry
+        ),
+    }
+
+
 class AsyncBridge:
     """Dispatches each request as its own task so one slow handler blocks nothing else."""
 
@@ -191,6 +208,8 @@ class AsyncBridge:
             self.handlers.update(
                 chat_handlers(config, config_path, self.registry, ProviderRegistry())
             )
+        if store is not None and config is not None:
+            self.handlers.update(ask_handlers(store, config, self.registry))
         self._running: dict[str, asyncio.Event] = {}
 
     def dispatch(self, request: Request) -> asyncio.Task[None]:
