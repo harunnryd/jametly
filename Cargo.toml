@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "src-tauri",
     "core/ipc-proto",
-    # core/audio-backend (Phase 1+)
+    "core/audio-backend",
     # core/screen-capture (Phase 1+)
     # core/sqlite-store (Phase 1+)
     # core/secure-store (Phase 1+)

@@ -1,7 +1,7 @@
 ---
 id: JAM-0003
 title: Async Python sidecar runtime and cancellation
-status: ready
+status: closed
 type: feat
 priority: P0
 labels: [ai, ipc, concurrency]

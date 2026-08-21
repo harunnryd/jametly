@@ -147,6 +147,11 @@ verify-jam-0001:
     uv run --project ai pytest tests/integration/test_bridge_echo.py -v
     cargo test -p jametly -- --nocapture
 
+# Phase 1 audio contract: dependency-free abstraction and deterministic mock.
+verify-jam-0004:
+    cargo test -p audio-backend -- --nocapture
+    cargo clippy -p audio-backend --all-targets -- -D warnings
+
 # Phase 0: full-duplex IPC — events and replies share one stdout stream.
 verify-jam-0002:
     cargo test -p ipc-proto
