@@ -2,22 +2,26 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessageChunk, BaseMessage, HumanMessage, SystemMessage
+from langgraph.graph import END, START, StateGraph
+from pydantic import ValidationError
 
 from ..config import AppConfig
 from ..db import LocalStore, StoreError
-from ..llm import ChatMessage, ChatModel, build_chat_model
+from ..llm import ChatMessage, build_chat_model
 from ..protocol import ErrorBody, ErrorCode, Event, Reply, Request
 from .checkpoint import load_ask_state, save_ask_state
-from .state import AskState, Citation
+from .state import AskGraphState, AskState, Citation
 from .tools import (
     TOOL_REGISTRY,
     ToolMutationError,
     UnknownToolError,
     invoke_tool,
+    search_history,
 )
 
 MAX_CONTEXT_UTTERANCES = 20
@@ -44,6 +48,7 @@ CONTEXT_BLOCK_TEMPLATE = (
 )
 
 Emit = Callable[[Event], Awaitable[None]]
+RunnableConfig = dict[str, Any]
 
 
 def stream_event(correlation_id: str, kind: str, **data: object) -> Event:
@@ -110,6 +115,16 @@ def build_prompt(
         messages.append(ChatMessage(role="system", content=context_block))
     messages.append(ChatMessage(role="user", content=state.question))
     return messages
+
+
+def _to_langchain(messages: list[ChatMessage]) -> list[BaseMessage]:
+    out: list[BaseMessage] = []
+    for msg in messages:
+        if msg.role == "system":
+            out.append(SystemMessage(content=msg.content))
+        else:
+            out.append(HumanMessage(content=msg.content))
+    return out
 
 
 def _resolve_meeting_id(
@@ -182,6 +197,25 @@ async def _emit_citations(
     return citations
 
 
+def _chunk_content(chunk: Any) -> str:
+    if isinstance(chunk, AIMessageChunk):
+        content = chunk.content
+    else:
+        message = getattr(chunk, "message", None)
+        content = getattr(message, "content", "") if message is not None else ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, dict) and "text" in item:
+                parts.append(str(item["text"]))
+            elif isinstance(item, str):
+                parts.append(item)
+        return "".join(parts)
+    return ""
+
+
 async def _run_tool_path(
     request: Request,
     emit: Emit,
@@ -246,13 +280,64 @@ async def _run_tool_path(
     )
 
 
+def _resolve_search_history_tool() -> Any:
+    return search_history
+
+
+async def _load_context_node(state: AskGraphState, config: RunnableConfig) -> dict:
+    return {"context": config["configurable"]["context"], "messages": config["configurable"]["messages"]}
+
+
+async def _call_model_node(state: AskGraphState, config: RunnableConfig) -> dict:
+    configurable = config["configurable"]
+    model: BaseChatModel = configurable["model"]
+    emit: Emit = configurable["emit"]
+    correlation_id: str = configurable["correlation_id"]
+    thread_id: str = configurable["thread_id"]
+    lc_messages: list[BaseMessage] = configurable["lc_messages"]
+
+    tokens: list[str] = []
+    async for chunk in model.astream(lc_messages):
+        text = _chunk_content(chunk)
+        if not text:
+            continue
+        tokens.append(text)
+        await emit(
+            stream_event(correlation_id, ASK_TOKEN, thread_id=thread_id, data=text)
+        )
+
+    context_utterance_ids = [str(u["id"]) for u in state.get("context", [])]
+    return {
+        "answer": "".join(tokens),
+        "context_utterance_ids": context_utterance_ids,
+    }
+
+
+def _build_ask_graph() -> Any:
+    graph = StateGraph(AskGraphState)
+    graph.add_node("load_context", _load_context_node)
+    graph.add_node("call_model", _call_model_node)
+    graph.add_edge(START, "load_context")
+    graph.add_edge("load_context", "call_model")
+    graph.add_edge("call_model", END)
+    return graph.compile()
+
+
+_ASK_GRAPH = _build_ask_graph()
+
+
+def _classify(exc: BaseException) -> tuple[ErrorCode, str]:
+    from .chat import _classify_provider_error
+    return _classify_provider_error(exc)
+
+
 async def handle_ask_stream(
     request: Request,
     emit: Emit,
     *,
     store: LocalStore,
     config: AppConfig,
-    model_factory: Callable[..., ChatModel] = build_chat_model,
+    model_factory: Callable[..., BaseChatModel] = build_chat_model,
     task_registry: Any = None,
 ) -> Reply:
     params = request.params if isinstance(request.params, dict) else {}
@@ -307,18 +392,38 @@ async def handle_ask_stream(
             return _err_reply(request.id, ErrorCode.PROVIDER_UNAVAILABLE, text)
         return _err_reply(request.id, ErrorCode.INVALID_REQUEST, text)
 
+    chat_messages = build_prompt(state, context)
+    lc_messages = _to_langchain(chat_messages)
+
     await emit(stream_event(request.id, ASK_STATE, thread_id=thread_id, state="started"))
 
-    messages = build_prompt(state, context)
+    initial_state: AskGraphState = {
+        "thread_id": thread_id,
+        "meeting_id": meeting_id,
+        "question": question,
+    }
+    runnable_config: RunnableConfig = {
+        "configurable": {
+            "thread_id": thread_id,
+            "correlation_id": request.id,
+            "context": context,
+            "messages": [m.model_dump(mode="json") for m in chat_messages],
+            "lc_messages": lc_messages,
+            "model": model,
+            "emit": emit,
+        }
+    }
+
     answer_tokens: list[str] = []
 
-    async def stream_tokens() -> None:
-        async for token in model.stream(messages):
-            answer_tokens.append(token)
-            await emit(stream_event(request.id, ASK_TOKEN, thread_id=thread_id, data=token))
+    async def drive_graph() -> None:
+        nonlocal answer_tokens
+        async for update in _ASK_GRAPH.astream(initial_state, runnable_config, stream_mode="updates"):
+            if "call_model" in update:
+                answer_tokens = update["call_model"].get("answer", "")
 
     try:
-        await asyncio.wait_for(stream_tokens(), timeout=deadline_s)
+        await asyncio.wait_for(drive_graph(), timeout=deadline_s)
     except asyncio.TimeoutError:
         await emit(stream_event(request.id, ASK_STATE, thread_id=thread_id, state="timeout"))
         await emit(
@@ -351,7 +456,7 @@ async def handle_ask_stream(
         retryable = bool(getattr(exc, "retryable", False))
         return _err_reply(request.id, code, message, retryable=retryable)
 
-    answer = "".join(answer_tokens)
+    answer = "".join(answer_tokens) if isinstance(answer_tokens, str) else answer_tokens
     state.answer = answer
     state.context_utterance_ids = [str(u["id"]) for u in context]
     save_ask_state(store, state)
@@ -383,11 +488,6 @@ async def handle_ask_stream(
             "citations": [c.model_dump(mode="json") for c in citations],
         },
     )
-
-
-def _classify(exc: BaseException) -> tuple[ErrorCode, str]:
-    from .chat import _classify_provider_error
-    return _classify_provider_error(exc)
 
 
 async def handle_ask_cancel(

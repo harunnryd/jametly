@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TypedDict
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -20,3 +22,14 @@ class AskState(BaseModel):
     question: str = Field(min_length=1)
     answer: str = ""
     context_utterance_ids: list[str] = Field(default_factory=list)
+
+
+class AskGraphState(TypedDict, total=False):
+    thread_id: str
+    meeting_id: str
+    question: str
+    context: list[dict]
+    messages: list[dict]
+    answer: str
+    context_utterance_ids: list[str]
+    cancelled: bool
