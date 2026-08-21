@@ -192,6 +192,12 @@ verify-jam-0009:
     uv run pytest tests/unit/test_db_session.py -q --no-header
     uv run pytest tests/integration/test_meeting_session.py -q --no-header
 
+# Local LLM provider factory + streaming chat: registry, chat.* + providers.* handlers, subprocess round-trip.
+verify-jam-0010:
+    uv run pytest tests/unit/test_llm_registry.py -q --no-header
+    uv run pytest tests/unit/test_chat_handler.py -q --no-header
+    uv run pytest tests/integration/test_chat_stream.py -q --no-header
+
 # ---- coverage -------------------------------------------------------------
 
 cov-rust:

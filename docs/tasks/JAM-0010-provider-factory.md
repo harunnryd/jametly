@@ -29,17 +29,17 @@ jametly needs a controlled local LLM boundary for answers and summaries. This ta
 
 ## Acceptance Criteria
 
-- [ ] Provider selection is explicit, persisted in local `config.toml`, and defaults to the documented local model.
-- [ ] `providers.list` returns configured AI/STT providers and `providers.set_selected` persists the selected provider through the config boundary.
-- [ ] `chat.stream` emits ordered token/state/done/error events with correlation IDs.
-- [ ] `chat.cancel` stops an in-flight stream without corrupting the meeting transcript.
-- [ ] Long-running requests enforce the configured deadline and emit canonical `PYTHON_TIMEOUT` errors.
-- [ ] Missing credentials, unavailable model, rate limit, and malformed provider responses map to canonical errors.
-- [ ] Tests use deterministic fake models; no runtime network call is required by CI.
+- [x] Provider selection is explicit, persisted in local `config.toml`, and defaults to the documented local model.
+- [x] `providers.list` returns configured AI/STT providers and `providers.set_selected` persists the selected provider through the config boundary.
+- [x] `chat.stream` emits ordered token/state/done/error events with correlation IDs.
+- [x] `chat.cancel` stops an in-flight stream without corrupting the meeting transcript.
+- [x] Long-running requests enforce the configured deadline and emit canonical `PYTHON_TIMEOUT` errors.
+- [x] Missing credentials, unavailable model, rate limit, and malformed provider responses map to canonical errors.
+- [x] Tests use deterministic fake models; no runtime network call is required by CI.
 
 ## Definition of Done
 
-- [ ] Provider/security review, tests, coverage, changelog, recipe, and CI are complete.
+- [x] Provider/security review, tests, coverage, changelog, recipe, and CI are complete.
 
 ## Escalation rules
 

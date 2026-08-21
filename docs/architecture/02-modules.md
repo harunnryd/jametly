@@ -66,6 +66,11 @@
 | `ai/src/jamly/agent/tools.py` | `@tool` defs: `screenshot`, `take_clipboard`, `search_history`, `switch_provider`, `run_stt` |
 | `ai/src/jamly/agent/checkpoint.py` | `SqliteSaver` factory + thread_id utils |
 | `ai/src/jamly/db.py` | Local SQLite store + FTS5 search |
+| `ai/src/jamly/llm/__init__.py` | `ProviderRegistry`, `build_chat_model`, `ProviderInfo`, `ChatMessage`, `ChatModel` protocol |
+| `ai/src/jamly/llm/base.py` | Built-in `ollama` / `faster-whisper` providers, provider-info pydantic, chat-model ABC |
+| `ai/src/jamly/llm/fake.py` | `FakeChatModel` (deterministic tokens + delay + optional mid-stream failure) for tests |
+| `ai/src/jamly/agent/__init__.py` | Package marker |
+| `ai/src/jamly/agent/chat.py` | `chat.stream` / `chat.cancel` / `providers.list` / `providers.set_selected` handlers, canonical error mapping, `PYTHON_TIMEOUT` via `asyncio.wait_for` |
 | `ai/src/jamly/meetings/__init__.py` | Package marker |
 | `ai/src/jamly/meetings/session.py` | Meeting session lifecycle, `meeting.*` IPC handlers, cold-start recovery |
 | `ai/src/jamly/meetings/summarizer.py` | LCEL + `with_structured_output(MeetingSummary)` |
