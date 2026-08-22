@@ -47,11 +47,12 @@ jobs:
     name: verify (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: []
-    timeout-minutes: 25
+    timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-2022, ubuntu-latest]
+        timeout: [12, 45, 12]
     steps:
       - uses: actions/checkout@v4
 
@@ -123,11 +124,12 @@ jobs:
     name: verify-ci (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: []
-    timeout-minutes: 45
+    timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-2022, ubuntu-latest]
+        timeout: [18, 60, 18]
     steps:
       - uses: actions/checkout@v4
 
