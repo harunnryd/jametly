@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "identifier": "app.jametly.desktop",
   "build": {
-    "frontendDist": "../app"
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "pnpm vite --config app/vite.config.ts",
+    "beforeBuildCommand": "pnpm vite build --config app/vite.config.ts"
   },
   "app": {
     "withGlobalTauri": false,
@@ -17,10 +20,15 @@
         "decorations": false,
         "transparent": true,
         "resizable": false,
+        "visible": false,
+        "alwaysOnTop": true,
         "skipTaskbar": true,
         "visibleOnAllWorkspaces": true,
         "contentProtected": true,
         "focus": false,
+        "closable": false,
+        "minimizable": false,
+        "maximizable": false,
         "acceptFirstMouse": true,
         "shadow": false
       }
