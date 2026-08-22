@@ -206,6 +206,12 @@ verify-jam-0011:
     uv run pytest tests/unit/test_ask_handler.py -q --no-header
     uv run pytest tests/integration/test_ask_stream.py -q --no-header
 
+# Meeting summaries, grounded action-item extraction, and followup.emit classification.
+verify-jam-0012:
+    uv run pytest tests/unit/test_extractor.py -q --no-header
+    uv run pytest tests/unit/test_summarizer.py -q --no-header
+    uv run pytest tests/integration/test_followups.py -q --no-header
+
 # ---- coverage -------------------------------------------------------------
 
 cov-rust:
