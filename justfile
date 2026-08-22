@@ -281,7 +281,7 @@ e2e-mac:
 
 audit:
     cargo audit
-    uv run pip-audit
+    uv run pip-audit --skip-editable
     @echo "If vulnerabilities found, see SECURITY.md for disclosure."
 
 # ---- stealth (gated on JAMETLY_STEALTH_E2E=1) ------------------------------
