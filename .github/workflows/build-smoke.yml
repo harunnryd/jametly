@@ -52,7 +52,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-2022, ubuntu-latest]
-        timeout: [12, 45, 12]
+        include:
+          - os: macos-latest
+            timeout: 12
+          - os: ubuntu-latest
+            timeout: 12
+          - os: windows-2022
+            timeout: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -129,7 +135,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-2022, ubuntu-latest]
-        timeout: [18, 60, 18]
+        include:
+          - os: macos-latest
+            timeout: 18
+          - os: ubuntu-latest
+            timeout: 18
+          - os: windows-2022
+            timeout: 60
     steps:
       - uses: actions/checkout@v4
 
