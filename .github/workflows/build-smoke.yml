@@ -61,7 +61,17 @@ jobs:
         uses: taiki-e/install-action@cargo-nextest
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+        uses: taiki-e/install-action@cargo-audit
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/uv
+            ~/.cache/uv
+            C:/Users/runner/AppData/Local/uv/cache
+          key: uv-${{ runner.os }}-${{ hashFiles('ai/uv.lock', 'pyproject.toml') }}
+          restore-keys: |
+            uv-${{ runner.os }}-
 
       - name: Install deps
         run: |
