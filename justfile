@@ -43,7 +43,7 @@ verify: rust-test-fast py-test-fast js-test-fast
     @echo "================ verify: ALL GREEN ================"
 
 # Tier 1 — CI parity (≤ 12 min). Every PR. + coverage + macOS e2e.
-verify-ci: verify js-typecheck py-test-cov cov-rust e2e-mac
+verify-ci: verify js-typecheck js-test-cov py-test-cov cov-rust e2e-mac
     @echo ""
     @echo "================ verify-ci: ALL GREEN ================"
 
