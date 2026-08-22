@@ -7,6 +7,7 @@ priority: P0
 labels: [ui, overlay, tauri, chat]
 milestone: m5-vision-and-history
 assigned-to: harunnryd
+pr: https://github.com/harunnryd/jametly/pull/15
 ---
 
 ## Blocked by
@@ -39,7 +40,15 @@ The frontend is currently a placeholder, so users cannot invoke Ask mode or see 
 
 ## Definition of Done
 
-- [x] UI tests (34 frontend + 12 Rust), accessibility review, coverage/format gates, changelog, recipe, and CI are complete.
+- [x] UI tests (43 frontend + 13 Rust), accessibility review, coverage/format gates, changelog, recipe, and CI are complete.
+- [x] **CodeRabbit review on PR #15 addressed.** Seven threads replied with commit-linked resolutions:
+  - 3835515760 (block repeat submit) — rejected with cancel-then-supersede rationale.
+  - 3835515772 (`state: "timeout"` drop) — fixed in `useChatStream` rewrite.
+  - 3835515775 (reset `active.current`) — fixed: ref replaced by `Flight` struct.
+  - 3835515777 (bound `jamly_invoke`) — fixed: 30 s `withDeadline` in `bridge.ts`.
+  - 3835515782 (Wayland tray lie) — soft-fixed: honest description, hard fallback deferred to JAM-0017.
+  - 3835515785 (monitor under cursor) — fixed in `window.rs::resolve_monitor`.
+  - 3835515789 (focus before hiding) — fixed: `set_focus()` after `show()`, `toggle_decision` truth table.
 - [ ] **Packaged Tauri E2E is deferred, not delivered.** `tauri-driver` has no macOS support, and the only cross-platform path (`@wdio/tauri-service` embedded provider) runs an HTTP WebDriver server inside the shipping binary and adds `wdio:*` capability entries. That is an RCE surface in a product that markets itself as fully local, and a cold release build blows the 12-min `verify-ci` budget on its own. Needs `@security-owner` + `@ipc-owner` sign-off against ADR-0006; tracked as a follow-up.
 
 ## Escalation rules
@@ -58,3 +67,10 @@ The frontend is currently a placeholder, so users cannot invoke Ask mode or see 
 ```bash
 just verify-jam-0014
 ```
+
+## Current status (2026-08-22)
+
+- PR #15 open against `main`: <https://github.com/harunnryd/jametly/pull/15>.
+- All seven CodeRabbit threads replied; no outstanding reviews.
+- `just verify` green locally (43 frontend + 13 Rust + 103 sidecar integration); CI run for the latest push is green on macOS, Linux, and Windows after the cross-platform test fixes (SIGTERM exit code, stderr polling).
+- `status: in_progress` until PR #15 merges; flips to `done` post-merge per the JAM-0011 convention.
