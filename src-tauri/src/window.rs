@@ -1,4 +1,6 @@
-use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, WebviewWindow};
+use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, PhysicalPosition, Runtime, WebviewWindow};
+
+use crate::shortcuts::{support_from_env, ShortcutSupport};
 
 pub const OVERLAY_LABEL: &str = "main";
 pub const OVERLAY_WIDTH: f64 = 600.0;
@@ -27,15 +29,33 @@ pub fn overlay<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R>> {
     app.get_webview_window(OVERLAY_LABEL)
 }
 
+fn resolve_monitor<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<Option<tauri::Monitor>> {
+    if cfg!(target_os = "linux") && support_from_env() != ShortcutSupport::Available {
+        return match window.current_monitor()? {
+            Some(monitor) => Ok(Some(monitor)),
+            None => window.primary_monitor(),
+        };
+    }
+
+    if let Ok(cursor) = window.cursor_position() {
+        let point: PhysicalPosition<f64> = cursor;
+        if point.x > 0.0 || point.y > 0.0 {
+            if let Ok(Some(monitor)) = window.monitor_from_point(point.x, point.y) {
+                return Ok(Some(monitor));
+            }
+        }
+    }
+
+    match window.current_monitor()? {
+        Some(monitor) => Ok(Some(monitor)),
+        None => window.primary_monitor(),
+    }
+}
+
 fn current_geometry<R: Runtime>(
     window: &WebviewWindow<R>,
 ) -> tauri::Result<Option<MonitorGeometry>> {
-    let monitor = match window.current_monitor()? {
-        Some(monitor) => Some(monitor),
-        None => window.primary_monitor()?,
-    };
-
-    Ok(monitor.map(|monitor| {
+    Ok(resolve_monitor(window)?.map(|monitor| {
         let scale = monitor.scale_factor();
         let size = monitor.size().to_logical::<f64>(scale);
         let position = monitor.position().to_logical::<f64>(scale);
@@ -57,8 +77,10 @@ pub fn reposition<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
 }
 
 pub fn show<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
-    reposition(window)?;
-    window.show()?;
+    if !window.is_visible().unwrap_or(false) {
+        reposition(window)?;
+        window.show()?;
+    }
     window.set_focus()
 }
 
@@ -66,15 +88,31 @@ pub fn hide<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
     window.hide()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToggleAction {
+    Show,
+    Hide,
+}
+
+pub fn toggle_decision(visible: bool, focused: bool) -> ToggleAction {
+    if visible && focused {
+        ToggleAction::Hide
+    } else {
+        ToggleAction::Show
+    }
+}
+
 pub fn toggle<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let Some(window) = overlay(app) else {
         return Ok(());
     };
 
-    if window.is_visible()? {
-        hide(&window)
-    } else {
-        show(&window)
+    let visible = window.is_visible().unwrap_or(false);
+    let focused = window.is_focused().unwrap_or(false);
+
+    match toggle_decision(visible, focused) {
+        ToggleAction::Hide => hide(&window),
+        ToggleAction::Show => show(&window),
     }
 }
 
@@ -126,5 +164,21 @@ mod tests {
         let origin = overlay_origin(monitor(0.0, 0.0, 1920.0, 20.0));
 
         assert_eq!(origin.y, 0.0);
+    }
+
+    #[test]
+    fn toggle_hides_when_visible_and_focused() {
+        assert_eq!(toggle_decision(true, true), ToggleAction::Hide);
+    }
+
+    #[test]
+    fn toggle_raises_when_visible_but_unfocused() {
+        assert_eq!(toggle_decision(true, false), ToggleAction::Show);
+    }
+
+    #[test]
+    fn toggle_shows_when_hidden() {
+        assert_eq!(toggle_decision(false, false), ToggleAction::Show);
+        assert_eq!(toggle_decision(false, true), ToggleAction::Show);
     }
 }
