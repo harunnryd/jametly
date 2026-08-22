@@ -16,6 +16,12 @@ def _resolve_paths() -> ConfigPaths:
     return ConfigPaths.from_home(Path.home())
 
 
+def _exit_without_joining_the_blocked_stdin_reader(code: int) -> None:
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
+
+
 def main() -> None:
     paths = _resolve_paths()
     store = LocalStore(paths.config_file.with_name("jametly.sqlite"))
@@ -23,8 +29,9 @@ def main() -> None:
         config = load_config(paths.config_file)
     except FileNotFoundError:
         config = AppConfig()
+    code = bridge.EXIT_CLEAN
     try:
-        bridge.run(
+        code = bridge.run(
             sys.stdin,
             sys.stdout,
             store=store,
@@ -33,6 +40,10 @@ def main() -> None:
         )
     finally:
         store.close()
+
+    if code == bridge.EXIT_SIGNALLED:
+        _exit_without_joining_the_blocked_stdin_reader(code)
+    sys.exit(code)
 
 
 if __name__ == "__main__":

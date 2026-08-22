@@ -206,6 +206,13 @@ verify-jam-0011:
     uv run pytest tests/unit/test_ask_handler.py -q --no-header
     uv run pytest tests/integration/test_ask_stream.py -q --no-header
 
+# Sidecar crash detection, bounded restart supervision, and clean shutdown.
+verify-jam-0025:
+    cargo test -p jametly --lib supervisor -- --nocapture
+    cargo test -p jametly --lib bridge
+    uv run pytest tests/unit/test_sidecar_shutdown.py -q --no-header
+    uv run pytest tests/integration/test_sidecar_restart.py -q --no-header
+
 # Meeting summaries, grounded action-item extraction, and followup.emit classification.
 verify-jam-0012:
     uv run pytest tests/unit/test_extractor.py -q --no-header

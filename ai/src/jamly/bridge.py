@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import os
+import signal
+import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import Awaitable, TextIO
+from typing import Any, Awaitable, TextIO
 
 from pydantic import ValidationError
 
@@ -27,6 +31,11 @@ CANCELLED_KIND = "cancelled"
 
 DEFAULT_STREAM_COUNT = 1
 THREAD_KEY = "thread_id"
+
+EXIT_CLEAN = 0
+EXIT_SIGNALLED = 130
+
+SHUTDOWN_SIGNALS = (signal.SIGTERM, signal.SIGINT)
 
 Emit = Callable[[Event], Awaitable[None]]
 Handler = Callable[[Request, Emit], Awaitable[Reply]]
@@ -295,6 +304,45 @@ async def read_line(stdin: TextIO) -> str:
     return await loop.run_in_executor(None, stdin.readline)
 
 
+def startup_banner(*, pid: int) -> str:
+    return f"jamly: sidecar ready pid={pid} python={sys.version.split()[0]}"
+
+
+def shutdown_banner(reason: str, code: int) -> str:
+    return f"jamly: sidecar shutting down reason={reason!r} exit_code={code}"
+
+
+def _request_shutdown_on_signals(stop: asyncio.Event) -> Callable[[], None]:
+    loop = asyncio.get_running_loop()
+    installed: list[signal.Signals] = []
+    for sig in SHUTDOWN_SIGNALS:
+        try:
+            loop.add_signal_handler(sig, stop.set)
+        except (NotImplementedError, RuntimeError, ValueError, AttributeError):
+            continue
+        installed.append(sig)
+
+    def restore() -> None:
+        for sig in installed:
+            with contextlib.suppress(NotImplementedError, RuntimeError, ValueError):
+                loop.remove_signal_handler(sig)
+
+    return restore
+
+
+async def _next_line_or_shutdown(stdin: TextIO, stop: asyncio.Event) -> str | None:
+    reader: Any = asyncio.ensure_future(read_line(stdin))
+    stopper: Any = asyncio.ensure_future(stop.wait())
+    done, _ = await asyncio.wait({reader, stopper}, return_when=asyncio.FIRST_COMPLETED)
+    if stopper in done:
+        reader.cancel()
+        return None
+    stopper.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await stopper
+    return str(reader.result())
+
+
 async def serve(
     stdin: TextIO,
     stdout: TextIO,
@@ -302,25 +350,42 @@ async def serve(
     store: LocalStore | None = None,
     config: AppConfig | None = None,
     config_path: Path | None = None,
-) -> None:
+) -> int:
     bridge = AsyncBridge(OutboundStream(stdout), store=store, config=config, config_path=config_path)
     if store is not None:
         from .meetings.session import recover_orphans
 
         await recover_orphans(store, bridge.outbound.send)
-    while True:
-        raw = await read_line(stdin)
-        if not raw:
-            break
-        line = raw.strip()
-        if not line:
-            continue
-        parsed = parse_line(line)
-        if isinstance(parsed, Reply):
-            await bridge.outbound.send(parsed)
-            continue
-        bridge.dispatch(parsed)
-    await bridge.drain()
+
+    print(startup_banner(pid=os.getpid()), file=sys.stderr, flush=True)
+
+    stop = asyncio.Event()
+    restore = _request_shutdown_on_signals(stop)
+    code = EXIT_CLEAN
+    reason = "stdin closed"
+    try:
+        while True:
+            raw = await _next_line_or_shutdown(stdin, stop)
+            if raw is None:
+                code = EXIT_SIGNALLED
+                reason = "shutdown signal"
+                break
+            if not raw:
+                break
+            line = raw.strip()
+            if not line:
+                continue
+            parsed = parse_line(line)
+            if isinstance(parsed, Reply):
+                await bridge.outbound.send(parsed)
+                continue
+            bridge.dispatch(parsed)
+    finally:
+        restore()
+        await bridge.drain()
+
+    print(shutdown_banner(reason, code), file=sys.stderr, flush=True)
+    return code
 
 
 def run(
@@ -330,5 +395,13 @@ def run(
     store: LocalStore | None = None,
     config: AppConfig | None = None,
     config_path: Path | None = None,
-) -> None:
-    asyncio.run(serve(stdin, stdout, store=store, config=config, config_path=config_path))
+) -> int:
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(
+            serve(stdin, stdout, store=store, config=config, config_path=config_path)
+        )
+    finally:
+        asyncio.set_event_loop(None)
+        loop.close()
