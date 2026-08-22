@@ -30,7 +30,8 @@ impl ShortcutSupport {
         match self {
             ShortcutSupport::Available => "global shortcuts are available",
             ShortcutSupport::UnsupportedSession => {
-                "global shortcuts do not work on Wayland; use the tray to open the overlay"
+                "global shortcuts do not work on Wayland; this build ships no built-in \
+                 Wayland opener (a tray icon is scoped to JAM-0017)"
             }
         }
     }
@@ -144,6 +145,7 @@ mod tests {
         if cfg!(target_os = "linux") {
             assert_eq!(support, ShortcutSupport::UnsupportedSession);
             assert!(support.describe().contains("Wayland"));
+            assert!(!support.describe().contains("tray"));
         } else {
             assert_eq!(support, ShortcutSupport::Available);
         }
