@@ -144,8 +144,10 @@ mod tests {
 
         if cfg!(target_os = "linux") {
             assert_eq!(support, ShortcutSupport::UnsupportedSession);
-            assert!(support.describe().contains("Wayland"));
-            assert!(!support.describe().contains("tray"));
+            let message = support.describe();
+            assert!(message.contains("Wayland"));
+            assert!(message.contains("do not work"));
+            assert!(message.contains("JAM-0017"));
         } else {
             assert_eq!(support, ShortcutSupport::Available);
         }
