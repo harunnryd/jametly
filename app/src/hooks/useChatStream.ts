@@ -5,10 +5,20 @@ import {
   startChat,
   subscribeStream,
   type BridgeFailure,
+  type ErrorCode,
   type StreamEvent,
 } from "@/lib/bridge";
 
 export type StreamStatus = "idle" | "streaming" | "complete" | "cancelled" | "error";
+
+type Terminal = Exclude<StreamStatus, "idle" | "streaming">;
+
+type Flight = {
+  generation: number;
+  correlationId: string;
+  threadId: string;
+  terminal: Terminal | null;
+};
 
 export type ChatStream = {
   status: StreamStatus;
@@ -19,49 +29,103 @@ export type ChatStream = {
   restart: () => void;
 };
 
-type Active = { correlationId: string; threadId: string };
+const RETRYABLE_CODES: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
+  "PROVIDER_RATE_LIMIT",
+  "PROVIDER_UNAVAILABLE",
+  "PYTHON_TIMEOUT",
+  "AUDIO_DEVICE_LOST",
+]);
+
+const TIMEOUT_FAILURE: BridgeFailure = {
+  code: "PYTHON_TIMEOUT",
+  message: "the engine took too long to answer",
+  retryable: true,
+};
 
 export function useChatStream(): ChatStream {
   const [status, setStatus] = useState<StreamStatus>("idle");
   const [answer, setAnswer] = useState("");
   const [failure, setFailure] = useState<BridgeFailure | null>(null);
-  const active = useRef<Active | null>(null);
+  const flight = useRef<Flight | null>(null);
+  const generation = useRef(0);
 
-  const handleEvent = useCallback((event: StreamEvent) => {
-    if (event.correlationId !== active.current?.correlationId) {
-      return;
+  const settle = useCallback((target: Flight, next: Terminal, reason: BridgeFailure | null) => {
+    target.terminal = next;
+    if (reason) {
+      setFailure(reason);
     }
-
-    switch (event.kind) {
-      case "token":
-        setAnswer((previous) => previous + event.text);
-        return;
-      case "done":
-        setStatus((previous) => (previous === "streaming" ? "complete" : previous));
-        return;
-      case "error":
-        setFailure({ code: event.code, message: event.message, retryable: false });
-        setStatus("error");
-        return;
-      case "cancelled":
-        setStatus("cancelled");
-        return;
-      default:
-        return;
-    }
+    setStatus(next);
   }, []);
+
+  const ownedBy = useCallback((correlationId: string): Flight | null => {
+    const current = flight.current;
+    if (!current || current.generation !== generation.current) {
+      return null;
+    }
+    if (current.correlationId !== correlationId || current.terminal !== null) {
+      return null;
+    }
+    return current;
+  }, []);
+
+  const handleEvent = useCallback(
+    (event: StreamEvent) => {
+      const current = ownedBy(event.correlationId);
+      if (!current) {
+        return;
+      }
+
+      switch (event.kind) {
+        case "token":
+          setAnswer((previous) => previous + event.text);
+          return;
+        case "state":
+          if (event.state === "timeout") {
+            settle(current, "error", TIMEOUT_FAILURE);
+          }
+          return;
+        case "done":
+          settle(current, "complete", null);
+          return;
+        case "error":
+          settle(current, "error", {
+            code: event.code,
+            message: event.message,
+            retryable: RETRYABLE_CODES.has(event.code),
+          });
+          return;
+        case "cancelled":
+          settle(current, "cancelled", null);
+          return;
+        default:
+          return;
+      }
+    },
+    [ownedBy, settle],
+  );
 
   useEffect(() => {
     let disposed = false;
     let unsubscribe: (() => void) | undefined;
 
-    void subscribeStream(handleEvent).then((stop) => {
-      if (disposed) {
-        stop();
-        return;
-      }
-      unsubscribe = stop;
-    });
+    void subscribeStream(handleEvent)
+      .then((stop) => {
+        if (disposed) {
+          stop();
+          return;
+        }
+        unsubscribe = stop;
+      })
+      .catch((reason: unknown) => {
+        if (disposed) {
+          return;
+        }
+        setFailure({
+          code: "TRANSPORT",
+          message: reason instanceof Error ? reason.message : String(reason),
+          retryable: true,
+        });
+      });
 
     return () => {
       disposed = true;
@@ -69,50 +133,79 @@ export function useChatStream(): ChatStream {
     };
   }, [handleEvent]);
 
-  const submit = useCallback((prompt: string) => {
-    const trimmed = prompt.trim();
-    if (trimmed.length === 0) {
+  const abandon = useCallback((target: Flight | null) => {
+    if (!target || target.terminal !== null) {
       return;
     }
-
-    const started = startChat({ messages: [{ role: "user", content: trimmed }] });
-    active.current = { correlationId: started.correlationId, threadId: started.threadId };
-    setAnswer("");
-    setFailure(null);
-    setStatus("streaming");
-
-    void started.reply.then((reply) => {
-      if (active.current?.correlationId !== started.correlationId) {
-        return;
-      }
-      if (!reply.ok) {
-        setFailure(reply.error);
-        setStatus("error");
-        return;
-      }
-      setStatus((previous) => (previous === "streaming" ? "complete" : previous));
-    });
+    target.terminal = "cancelled";
+    void cancelChat(target.threadId);
   }, []);
 
+  const submit = useCallback(
+    (prompt: string) => {
+      const trimmed = prompt.trim();
+      if (trimmed.length === 0) {
+        return;
+      }
+
+      abandon(flight.current);
+
+      const started = startChat({ messages: [{ role: "user", content: trimmed }] });
+      generation.current += 1;
+      const mine: Flight = {
+        generation: generation.current,
+        correlationId: started.correlationId,
+        threadId: started.threadId,
+        terminal: null,
+      };
+      flight.current = mine;
+
+      setAnswer("");
+      setFailure(null);
+      setStatus("streaming");
+
+      void started.reply.then((reply) => {
+        if (flight.current !== mine || mine.generation !== generation.current) {
+          return;
+        }
+        if (mine.terminal === "cancelled") {
+          return;
+        }
+        if (!reply.ok) {
+          settle(mine, "error", reply.error);
+          return;
+        }
+        if (mine.terminal === null) {
+          settle(mine, "complete", null);
+        }
+      });
+    },
+    [abandon, settle],
+  );
+
   const cancel = useCallback(() => {
-    const current = active.current;
-    if (!current) {
+    const current = flight.current;
+    if (!current || current.terminal !== null) {
       return;
     }
     void cancelChat(current.threadId);
-    setStatus("cancelled");
-  }, []);
+    settle(current, "cancelled", null);
+  }, [settle]);
 
   const restart = useCallback(() => {
+    abandon(flight.current);
+    generation.current += 1;
+    flight.current = null;
+    setAnswer("");
+    setFailure(null);
+    setStatus("idle");
+
     void restartEngine().then((reply) => {
-      if (reply.ok) {
-        setFailure(null);
-        setStatus("idle");
-      } else {
+      if (!reply.ok) {
         setFailure(reply.error);
       }
     });
-  }, []);
+  }, [abandon]);
 
   return { status, answer, failure, submit, cancel, restart };
 }
