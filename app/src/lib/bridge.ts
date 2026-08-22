@@ -178,14 +178,17 @@ export function parseStreamEvent(raw: unknown): StreamEvent | null {
   }
 }
 
-function transportFailure(message: string): BridgeFailure {
-  return { code: "TRANSPORT", message, retryable: false };
+function transportFailure(message: string, retryable = false): BridgeFailure {
+  return { code: "TRANSPORT", message, retryable };
 }
 
 function classifyRejection(reason: unknown): BridgeFailure {
   const message = reason instanceof Error ? reason.message : String(reason);
   if (message.includes(ENGINE_STOPPED_MARKER)) {
     return { code: "ENGINE_STOPPED", message, retryable: true };
+  }
+  if (message.includes("without a reply")) {
+    return transportFailure(message, true);
   }
   return transportFailure(message);
 }
@@ -215,14 +218,39 @@ export function newThreadId(): string {
   return `th-${crypto.randomUUID()}`;
 }
 
+const DEFAULT_DEADLINE_MS = 30_000;
+
+function withDeadline<T>(promise: Promise<T>, deadlineMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} exceeded ${deadlineMs}ms without a reply`));
+    }, deadlineMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (reason) => {
+        clearTimeout(timer);
+        reject(reason);
+      },
+    );
+  });
+}
+
 export async function call<T>(
   method: string,
   params: Record<string, unknown>,
-  options: { id?: string } = {},
+  options: { id?: string; deadlineMs?: number } = {},
 ): Promise<Reply<T>> {
   const id = options.id ?? newRequestId();
+  const deadlineMs = options.deadlineMs ?? DEFAULT_DEADLINE_MS;
   try {
-    const raw = await invoke("jamly_invoke", { id, method, params });
+    const raw = await withDeadline(
+      invoke("jamly_invoke", { id, method, params }),
+      deadlineMs,
+      `jamly_invoke ${method}`,
+    );
     return narrowReply<T>(raw);
   } catch (reason) {
     return { ok: false, error: classifyRejection(reason) };

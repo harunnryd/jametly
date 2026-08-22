@@ -154,6 +154,27 @@ describe("call", () => {
 
     expect(reply).toMatchObject({ ok: false, error: { code: "TRANSPORT" } });
   });
+
+  it("times out and reports a transport failure when the invoke hangs", async () => {
+    invoke.mockImplementation(() => new Promise(() => {}));
+
+    const reply = await call("chat.stream", {}, { deadlineMs: 5 });
+
+    expect(reply.ok).toBe(false);
+    if (!reply.ok) {
+      expect(reply.error.code).toBe("TRANSPORT");
+      expect(reply.error.retryable).toBe(true);
+      expect(reply.error.message).toMatch(/exceeded 5ms/);
+    }
+  });
+
+  it("does not time out when the invoke resolves within the deadline", async () => {
+    invoke.mockResolvedValue({ id: "req-1", result: { thread_id: "th", model: "m", tokens: 0 } });
+
+    const reply = await call("chat.stream", {}, { deadlineMs: 1000 });
+
+    expect(reply).toEqual({ ok: true, value: { thread_id: "th", model: "m", tokens: 0 } });
+  });
 });
 
 describe("subscribeStream", () => {
