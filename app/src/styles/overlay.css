@@ -1,0 +1,149 @@
+:root {
+  --overlay-radius: 12px;
+  --overlay-scrim: rgba(18, 18, 22, 0.82);
+  --overlay-border: rgba(255, 255, 255, 0.12);
+  --overlay-text: rgba(244, 244, 248, 0.96);
+  --overlay-muted: rgba(244, 244, 248, 0.56);
+  --overlay-danger: rgba(255, 138, 128, 0.96);
+  --overlay-row: 54px;
+}
+
+html,
+body {
+  margin: 0;
+  background: transparent;
+  color: var(--overlay-text);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+
+.overlay {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--overlay-radius);
+  border: 1px solid var(--overlay-border);
+  background: var(--overlay-scrim);
+  backdrop-filter: blur(24px);
+  overflow: hidden;
+}
+
+.overlay__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--overlay-row);
+  padding: 0 16px;
+  -webkit-app-region: drag;
+}
+
+.overlay__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.overlay__input {
+  flex: 1;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  -webkit-app-region: no-drag;
+}
+
+.overlay__input::placeholder {
+  color: var(--overlay-muted);
+}
+
+.overlay__input:focus-visible {
+  outline: 2px solid rgba(120, 170, 255, 0.9);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.overlay__pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--overlay-text);
+  animation: overlay-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes overlay-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay__pulse {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+.overlay__status {
+  margin: 0;
+  padding: 0 16px;
+  color: var(--overlay-muted);
+  font-size: 12px;
+}
+
+.overlay__status:empty {
+  display: none;
+}
+
+.overlay__answer {
+  padding: 8px 16px 14px;
+  max-height: 40vh;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.overlay__answer[data-empty="true"] {
+  padding: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.overlay__failure {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--overlay-border);
+  color: var(--overlay-danger);
+  font-size: 12px;
+}
+
+.overlay__failure-code {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.overlay__failure-message {
+  flex: 1;
+  color: var(--overlay-text);
+}
+
+.overlay__restart {
+  border: 1px solid var(--overlay-border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 4px 10px;
+  cursor: pointer;
+}

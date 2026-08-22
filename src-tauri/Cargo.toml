@@ -32,6 +32,12 @@ audio-backend = { path = "../core/audio-backend" }
 screen-capture = { path = "../core/screen-capture" }
 secure-store = { path = "../core/secure-store" }
 
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-global-shortcut = "2"
+
+[dev-dependencies]
+tauri = { version = "2", features = ["macos-private-api", "test"] }
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

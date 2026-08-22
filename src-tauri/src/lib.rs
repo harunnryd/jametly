@@ -2,7 +2,10 @@ pub mod audio;
 mod bridge;
 pub mod capture;
 pub mod secure_store;
+#[cfg(desktop)]
+pub mod shortcuts;
 mod supervisor;
+pub mod window;
 
 mod commands {
     use super::*;
@@ -86,6 +89,30 @@ pub fn run() {
     run_app()
 }
 
+#[cfg(desktop)]
+fn install_overlay_shortcut(app: &tauri::App) {
+    let toggle = match shortcuts::parse_toggle(shortcuts::DEFAULT_TOGGLE_SHORTCUT) {
+        Ok(toggle) => toggle,
+        Err(error) => {
+            eprintln!("overlay: {error}");
+            return;
+        }
+    };
+
+    let handle = app.handle();
+    if let Err(error) = handle.plugin(shortcuts::plugin(toggle)) {
+        eprintln!("overlay: could not install the shortcut plugin: {error}");
+        return;
+    }
+
+    if let Err(error) = shortcuts::register_toggle(handle, shortcuts::DEFAULT_TOGGLE_SHORTCUT) {
+        eprintln!(
+            "overlay: {} is unavailable ({error}); open the overlay from the tray instead",
+            shortcuts::DEFAULT_TOGGLE_SHORTCUT
+        );
+    }
+}
+
 fn run_app() {
     tauri::Builder::default()
         .setup(|_app| {
@@ -100,12 +127,33 @@ fn run_app() {
                     }
                 }
             });
+
+            #[cfg(target_os = "macos")]
+            _app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+            #[cfg(desktop)]
+            install_overlay_shortcut(_app);
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::jamly_invoke,
             commands::jamly_restart_engine
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running jametly desktop shell");
+        .build(tauri::generate_context!())
+        .expect("error while running jametly desktop shell")
+        .run(|handle, event| {
+            if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+                #[cfg(desktop)]
+                shortcuts::unregister_all(handle);
+                #[cfg(not(desktop))]
+                let _ = handle;
+            }
+        });
 }

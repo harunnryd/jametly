@@ -77,7 +77,8 @@ src-tauri/gen/
 
 # Build / dist outputs
 # ----------------------------------------------------------------------------
-dist/
+dist/*
+!dist/.gitkeep
 build/
 out/
 *.dmg
@@ -129,7 +130,8 @@ target/mutants-*
 # Hatchling / uv build artifacts
 # ----------------------------------------------------------------------------
 build/
-dist/
+dist/*
+!dist/.gitkeep
 *.egg-info/
 __pycache__/
 
