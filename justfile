@@ -235,7 +235,7 @@ cov-rust:
     set -euo pipefail
     mkdir -p target/coverage
     if command -v rustup >/dev/null 2>&1; then
-        cargo llvm-cov --workspace --all-features --no-report
+        cargo llvm-cov nextest --workspace --all-features --no-report
         cargo llvm-cov report \
             --lcov --output-path target/coverage/rust.lcov
         cargo llvm-cov report \
@@ -243,7 +243,7 @@ cov-rust:
     else
         llvm_root="$(brew --prefix llvm)"
         LLVM_COV="$llvm_root/bin/llvm-cov" LLVM_PROFDATA="$llvm_root/bin/llvm-profdata" \
-            cargo llvm-cov --workspace --all-features --no-report
+            cargo llvm-cov nextest --workspace --all-features --no-report
         LLVM_COV="$llvm_root/bin/llvm-cov" LLVM_PROFDATA="$llvm_root/bin/llvm-profdata" \
             cargo llvm-cov report \
                 --lcov --output-path target/coverage/rust.lcov
