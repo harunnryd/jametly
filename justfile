@@ -38,12 +38,12 @@ install:
 # ========================================================================
 
 # Tier 0 — PR gate (≤ 3 min). Every commit. Lint + fast unit.
-verify: rust-test-fast py-test-fast
+verify: rust-test-fast py-test-fast js-test-fast
     @echo ""
     @echo "================ verify: ALL GREEN ================"
 
 # Tier 1 — CI parity (≤ 12 min). Every PR. + coverage + macOS e2e.
-verify-ci: verify py-test-cov cov-rust e2e-mac
+verify-ci: verify js-typecheck py-test-cov cov-rust e2e-mac
     @echo ""
     @echo "================ verify-ci: ALL GREEN ================"
 
@@ -219,6 +219,15 @@ verify-jam-0012:
     uv run pytest tests/unit/test_summarizer.py -q --no-header
     uv run pytest tests/integration/test_followups.py -q --no-header
 
+# Hotkey overlay: typed bridge client, overlay behavior, window geometry, shortcut guards.
+verify-jam-0014:
+    pnpm vitest run app/src/__tests__/bridge.test.ts
+    pnpm vitest run app/src/__tests__/App.test.tsx
+    pnpm vitest run tests/e2e/overlay.journey.test.tsx
+    pnpm typecheck
+    cargo test -p jametly --lib window
+    cargo test -p jametly --lib shortcuts
+
 # ---- coverage -------------------------------------------------------------
 
 cov-rust:
@@ -235,6 +244,18 @@ cov-rust:
         LLVM_COV="$llvm_root/bin/llvm-cov" LLVM_PROFDATA="$llvm_root/bin/llvm-profdata" \
             cargo llvm-cov --workspace --html --output-dir target/coverage/html
     fi
+
+# ---- frontend (React overlay) ---------------------------------------------
+
+# Tier 0 gate: bridge contract, overlay behavior, renderer journeys.
+js-test-fast:
+    pnpm vitest run
+
+js-typecheck:
+    pnpm typecheck
+
+js-test-cov:
+    pnpm vitest run --coverage
 
 # ---- Tauri e2e (macOS only by default) ------------------------------------
 

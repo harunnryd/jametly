@@ -38,6 +38,15 @@ jobs:
 
       - uses: extractions/setup-just@v3
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
@@ -56,6 +65,7 @@ jobs:
       - name: Install deps
         run: |
           uv sync --all-extras --frozen
+          pnpm install --frozen-lockfile
           cargo fetch
 
       - name: Tier 0 verify (PR gate)
