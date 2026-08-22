@@ -35,9 +35,12 @@ jobs:
           node-version: 22
           cache: pnpm
       - uses: extractions/setup-just@v3
-      - run: |
+      - name: Install Tauri build deps (Linux)
+        run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils libglib2.0-dev
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libappindicator3-dev \
+            librsvg2-dev patchelf xdg-utils libglib2.0-dev
       - run: cargo build --workspace --all-features
 
   verify:
@@ -207,6 +210,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: extractions/setup-just@v3
       - name: Install cargo-audit
         uses: taiki-e/install-action@cargo-audit
       - run: just audit
