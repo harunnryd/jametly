@@ -58,7 +58,7 @@ jobs:
           - os: ubuntu-latest
             timeout: 12
           - os: windows-2022
-            timeout: 45
+            timeout: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -77,6 +77,12 @@ jobs:
             . -> target
             src-tauri -> ../src-tauri/target
             core -> ../core/target
+
+      - name: Set up sccache (Windows only — cuts cold-cache build)
+        if: matrix.os == 'windows-2022'
+        uses: mozilla-actions/sccache-action@v0.0.4
+        env:
+          SCCACHE_GHA_ENABLED: "true"
 
       - uses: astral-sh/setup-uv@v6
         with:
@@ -141,7 +147,7 @@ jobs:
           - os: ubuntu-latest
             timeout: 18
           - os: windows-2022
-            timeout: 60
+            timeout: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -160,6 +166,12 @@ jobs:
             . -> target
             src-tauri -> ../src-tauri/target
             core -> ../core/target
+
+      - name: Set up sccache (Windows only — cuts cold-cache build)
+        if: matrix.os == 'windows-2022'
+        uses: mozilla-actions/sccache-action@v0.0.4
+        env:
+          SCCACHE_GHA_ENABLED: "true"
 
       - uses: astral-sh/setup-uv@v6
         with:
